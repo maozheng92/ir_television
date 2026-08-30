@@ -552,7 +552,7 @@ class TelevisionFlowMixin:
         raise NotImplementedError
 
 
-class IRTelevisionConfigFlow(TelevisionFlowMixin, ConfigFlow, domain=DOMAIN):
+class IRTelevisionConfigFlow(ConfigFlow, TelevisionFlowMixin, domain=DOMAIN):
     """Initial setup wizard."""
 
     VERSION = 1
@@ -590,7 +590,7 @@ class IRTelevisionConfigFlow(TelevisionFlowMixin, ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
 
 
-class IRTelevisionOptionsFlow(TelevisionFlowMixin, OptionsFlow):
+class IRTelevisionOptionsFlow(OptionsFlow, TelevisionFlowMixin):
     """Edit name, commands, and sources after install."""
 
     def __init__(self, config_entry: ConfigEntry | None = None) -> None:

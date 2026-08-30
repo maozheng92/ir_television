@@ -45,17 +45,40 @@ Companion 的 Remote Widget / 控制中心遥控器会寻找：
 
 ### 安装
 
+安装完成后必须**重启 Home Assistant**，然后在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视** 或 **IR Television**。
+
+**正确目录（这一条最重要）**
+
+`manifest.json` 必须出现在：
+
+```text
+<config>/custom_components/ir_television/manifest.json
+```
+
+例如 `/config/custom_components/ir_television/manifest.json`（Home Assistant OS / Container）。  
+如果复制了整个仓库却多了一层 `custom_components/ir_television/custom_components/...`，集成**不会出现**。
+
 **HACS（推荐）**
 
 1. HACS → 右上角 ⋮ → Custom repositories
 2. 填入此仓库地址，类别选 Integration
-3. 搜索 **IR Television** 并下载
-4. 重启 Home Assistant
+3. 搜索 **红外电视** 或 **IR Television** 并下载
+4. **重启** Home Assistant
 
 **手动安装**
 
-1. 把 `custom_components/ir_television` 复制到你的 Home Assistant 配置目录：`config/custom_components/ir_television`
-2. 重启 Home Assistant
+1. 在 Home Assistant 配置目录创建 `custom_components/ir_television/`
+2. 把本仓库**根目录**里的这些文件/文件夹全部放进去（不要再套一层目录）：
+   - `manifest.json`、`__init__.py`、`config_flow.py`、`media_player.py`、`strings.json`、`translations/` 等
+3. 重启 Home Assistant
+
+**添加后仍搜不到时**
+
+1. 确认路径是 `custom_components/ir_television/manifest.json`，且该文件里 `"domain": "ir_television"`
+2. 完整重启一次（仅重新加载前端不够）
+3. 搜索 **红外电视**、**IR Television** 或 **ir_television**
+4. 设置 → 系统 → 日志，查找 `ir_television` / `custom integration` 报错
+5. 浏览器强制刷新或换无痕窗口（有时是前端缓存）
 
 ### 添加集成
 
@@ -172,9 +195,11 @@ Learn IR codes in the official Broadlink integration **first**. This component o
 
 ### Install
 
-**HACS:** add this repo as a custom integration repository, download **IR Television**, restart.
+**HACS:** add this repo as a custom integration repository, download **红外电视 IR Television**, restart.
 
-**Manual:** copy `custom_components/ir_television` to `<config>/custom_components/ir_television` and restart.
+**Manual:** copy the **repository root** files (so `manifest.json` sits at `<config>/custom_components/ir_television/manifest.json`) and restart. Do not nest an extra `custom_components/` folder.
+
+If it does not show up: confirm that path, restart Core, search **红外电视** / **IR Television**, and check the log for `ir_television`.
 
 ### Add the integration
 
@@ -227,28 +252,27 @@ Add the Home Assistant Remote widget (or Control Center remote) and pick this me
 ## Development
 
 Domain: `ir_television`  
-Path: `custom_components/ir_television/`
+This repository **is** the integration (HACS `content_in_root`). After install, Home Assistant loads `<config>/custom_components/ir_television/`.
 
 ```text
-custom_components/ir_television/
-  __init__.py
-  manifest.json
-  const.py
-  actions.py          # feature flags & validation (no Home Assistant import)
-  command_sender.py
-  config_flow.py
-  flow_schemas.py
-  media_player.py
-  button.py
-  diagnostics.py
-  strings.json
-  translations/en.json
-  translations/zh-Hans.json
+manifest.json
+__init__.py
+const.py
+actions.py          # feature flags & validation (no Home Assistant import)
+command_sender.py
+config_flow.py
+flow_schemas.py
+media_player.py
+button.py
+diagnostics.py
+strings.json
+translations/en.json
+translations/zh-Hans.json
 ```
 
 Syntax check (no Home Assistant install required):
 
 ```bash
-python -m compileall custom_components
+python -m compileall .
 python -m unittest discover -s tests -v
 ```
