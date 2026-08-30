@@ -1,0 +1,10 @@
+{
+  "domain": "ir_television",
+  "name": "IR Television",
+  "codeowners": [],
+  "config_flow": true,
+  "integration_type": "device",
+  "iot_class": "assumed_state",
+  "requirements": [],
+  "version": "1.0.0"
+}
