@@ -13,6 +13,8 @@ CONF_COMMANDS = "commands"
 CONF_SOURCES = "sources"
 CONF_DEFAULT_REMOTE = "default_remote"
 CONF_DEFAULT_DEVICE = "default_device"
+CONF_POWER_SENSOR = "power_sensor"
+CONF_POWER_SENSOR_INVERT = "power_sensor_invert"
 
 # Action payload keys
 CONF_ACTION_TYPE = "action_type"

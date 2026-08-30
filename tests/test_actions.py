@@ -63,9 +63,12 @@ build_button_service_data = actions.build_button_service_data
 build_remote_service_data = actions.build_remote_service_data
 build_source_list = actions.build_source_list
 compute_supported_features = actions.compute_supported_features
+copy_config = actions.copy_config
 find_source = actions.find_source
 has_useful_config = actions.has_useful_config
+normalize_power_sensor = actions.normalize_power_sensor
 parse_action_input = actions.parse_action_input
+power_is_on_from_sensor = actions.power_is_on_from_sensor
 resolve_command_key = actions.resolve_command_key
 validate_source_name = actions.validate_source_name
 
@@ -264,6 +267,55 @@ class ParseActionTests(unittest.TestCase):
             action_is_valid({"type": ACTION_BROADLINK, "entity_id": "remote.x"})
         )
         self.assertFalse(action_is_valid(None))
+
+
+class PowerSensorTests(unittest.TestCase):
+    def test_on_off(self) -> None:
+        self.assertTrue(power_is_on_from_sensor("on"))
+        self.assertFalse(power_is_on_from_sensor("off"))
+        self.assertTrue(power_is_on_from_sensor("ON"))
+
+    def test_unknown(self) -> None:
+        self.assertIsNone(power_is_on_from_sensor(None))
+        self.assertIsNone(power_is_on_from_sensor("unavailable"))
+        self.assertIsNone(power_is_on_from_sensor("unknown"))
+        self.assertIsNone(power_is_on_from_sensor(""))
+        self.assertIsNone(power_is_on_from_sensor("playing"))
+
+    def test_invert(self) -> None:
+        self.assertFalse(power_is_on_from_sensor("on", invert=True))
+        self.assertTrue(power_is_on_from_sensor("off", invert=True))
+        self.assertIsNone(power_is_on_from_sensor("unavailable", invert=True))
+
+    def test_normalize(self) -> None:
+        self.assertEqual(normalize_power_sensor(None), (None, None))
+        self.assertEqual(normalize_power_sensor("  "), (None, None))
+        self.assertEqual(
+            normalize_power_sensor("binary_sensor.tv_power"),
+            ("binary_sensor.tv_power", None),
+        )
+        self.assertEqual(
+            normalize_power_sensor("sensor.tv_power"),
+            (None, "invalid_power_sensor"),
+        )
+
+    def test_copy_config_keeps_sensor(self) -> None:
+        copied = copy_config(
+            {
+                "name": "Living TV",
+                "commands": {"volume_up": _ir("v+")},
+                "sources": [],
+                "power_sensor": "binary_sensor.plug_tv",
+                "power_sensor_invert": True,
+            }
+        )
+        self.assertEqual(copied["power_sensor"], "binary_sensor.plug_tv")
+        self.assertTrue(copied["power_sensor_invert"])
+
+    def test_copy_config_defaults_sensor(self) -> None:
+        copied = copy_config({"name": "TV", "commands": {}, "sources": []})
+        self.assertIsNone(copied["power_sensor"])
+        self.assertFalse(copied["power_sensor_invert"])
 
 
 if __name__ == "__main__":

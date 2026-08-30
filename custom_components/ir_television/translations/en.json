@@ -28,6 +28,18 @@
           "power_mode": "Power keys"
         }
       },
+      "power_sensor": {
+        "title": "Power state sensor",
+        "description": "Optional. Pick a `binary_sensor` that reports whether the TV is actually on (smart plug, current clamp, HDMI-CEC, template, …). When set, this media player uses it as power feedback instead of assumed state. Leave empty to keep assumed on/off.\n\nCurrent sensor: {current_sensor}",
+        "data": {
+          "power_sensor": "Power binary sensor",
+          "power_sensor_invert": "Invert (sensor on = TV off)"
+        },
+        "data_description": {
+          "power_sensor": "on = TV is on, off = TV is off. Clear the field to disable feedback.",
+          "power_sensor_invert": "Enable if this sensor is on when the television is off."
+        }
+      },
       "command": {
         "title": "Map: {command}",
         "description": "Configure **{command}** (`{command_key}`).\n\n• Broadlink: pick a `remote.*` entity (or rely on the default), enter the learned command name, and optionally the Broadlink device name.\n• Button: pick a `button.*` entity. Pressing it is what this key will do.",
@@ -110,7 +122,8 @@
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
       "invalid_action_type": "Choose Broadlink IR or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
-      "no_commands": "Configure at least one command or one source before finishing."
+      "no_commands": "Configure at least one command or one source before finishing.",
+      "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty."
     },
     "abort": {
       "already_configured": "This television is already configured."
@@ -120,11 +133,12 @@
     "step": {
       "init": {
         "title": "Configure IR Television",
-        "description": "**{name}** — {command_count} command(s), {source_count} source(s). Changes are kept until you choose Save and reload.",
+        "description": "**{name}** — {command_count} command(s), {source_count} source(s). Power sensor: {power_sensor}. Changes are kept until you choose Save and reload.",
         "menu_options": {
           "name": "Rename",
           "defaults": "Default Broadlink remote",
           "power": "Power",
+          "power_sensor": "Power state sensor",
           "volume": "Volume / mute",
           "playback": "Playback",
           "channel": "Channel / tracks",
@@ -152,6 +166,18 @@
         "description": "Choosing a new mode replaces the current power mappings.\n{current}",
         "data": {
           "power_mode": "Power keys"
+        }
+      },
+      "power_sensor": {
+        "title": "Power state sensor",
+        "description": "Optional `binary_sensor` for real on/off. When set, the TV is no longer assumed-state for power. Clear the entity to go back to assumed on/off.\n\nCurrent sensor: {current_sensor}",
+        "data": {
+          "power_sensor": "Power binary sensor",
+          "power_sensor_invert": "Invert (sensor on = TV off)"
+        },
+        "data_description": {
+          "power_sensor": "on = TV is on, off = TV is off.",
+          "power_sensor_invert": "Enable if this sensor is on when the television is off."
         }
       },
       "command": {
@@ -269,7 +295,8 @@
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
       "invalid_action_type": "Choose Broadlink IR or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
-      "no_commands": "Keep at least one command or one source."
+      "no_commands": "Keep at least one command or one source.",
+      "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty."
     },
     "abort": {
       "unknown": "Something went wrong."

@@ -38,6 +38,8 @@ from .const import (
     CONF_DEVICE,
     CONF_NAME,
     CONF_NUM_REPEATS,
+    CONF_POWER_SENSOR,
+    CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
     CONF_SOURCE_NAME,
     POWER_MODE_ON_OFF,
@@ -73,6 +75,22 @@ def defaults_schema(data: dict[str, Any]) -> vol.Schema:
                 CONF_DEFAULT_DEVICE,
                 default=data.get(CONF_DEFAULT_DEVICE) or "",
             ): _text(),
+        }
+    )
+
+
+def power_sensor_schema(
+    sensor: str | None = None,
+    invert: bool = False,
+) -> vol.Schema:
+    """Optional binary_sensor used as TV power feedback."""
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_POWER_SENSOR,
+                description={"suggested_value": sensor},
+            ): EntitySelector(EntitySelectorConfig(domain="binary_sensor")),
+            vol.Required(CONF_POWER_SENSOR_INVERT, default=invert): BooleanSelector(),
         }
     )
 

@@ -28,6 +28,18 @@
           "power_mode": "电源按键"
         }
       },
+      "power_sensor": {
+        "title": "电源状态传感器",
+        "description": "可选。选择一个能反映电视是否真正开机的 `binary_sensor`（智能插座、电流钳、HDMI-CEC、模板传感器等）。配置后，本媒体播放器会用它作为电源回读，而不再假定开关状态。留空则继续使用假定状态。\n\n当前传感器：{current_sensor}",
+        "data": {
+          "power_sensor": "电源 binary_sensor",
+          "power_sensor_invert": "反转（传感器 on = 电视关机）"
+        },
+        "data_description": {
+          "power_sensor": "on 表示电视开机，off 表示关机。清空此项即关闭回读。",
+          "power_sensor_invert": "若该传感器在电视关机时为 on，请勾选。"
+        }
+      },
       "command": {
         "title": "映射：{command}",
         "description": "正在配置 **{command}**（`{command_key}`）。\n\n• Broadlink：选择 `remote.*` 实体（或使用默认值），填写已学习的指令名，以及可选的设备名。\n• 按钮：选择一个 `button.*` 实体，按下该按钮即执行此按键。",
@@ -110,7 +122,8 @@
       "invalid_entity": "该实体不是预期的 remote 或 button 域。",
       "invalid_action_type": "请选择 Broadlink 红外或按钮。",
       "invalid_repeats": "重复次数必须是 1 到 10 之间的整数。",
-      "no_commands": "完成前请至少配置一条指令或一个输入源。"
+      "no_commands": "完成前请至少配置一条指令或一个输入源。",
+      "invalid_power_sensor": "请选择 binary_sensor 实体，或不填此项。"
     },
     "abort": {
       "already_configured": "这台电视已经配置过了。"
@@ -120,11 +133,12 @@
     "step": {
       "init": {
         "title": "配置红外电视",
-        "description": "**{name}** — {command_count} 条指令，{source_count} 个输入源。修改会暂存在向导中，选择“保存并重新加载”后生效。",
+        "description": "**{name}** — {command_count} 条指令，{source_count} 个输入源。电源传感器：{power_sensor}。修改会暂存在向导中，选择“保存并重新加载”后生效。",
         "menu_options": {
           "name": "重命名",
           "defaults": "默认 Broadlink 遥控器",
           "power": "电源",
+          "power_sensor": "电源状态传感器",
           "volume": "音量 / 静音",
           "playback": "播放控制",
           "channel": "频道 / 曲目",
@@ -152,6 +166,18 @@
         "description": "选择新模式会替换当前电源映射。\n{current}",
         "data": {
           "power_mode": "电源按键"
+        }
+      },
+      "power_sensor": {
+        "title": "电源状态传感器",
+        "description": "可选的 `binary_sensor`，用于真实开关机状态。配置后电源不再使用假定状态。清空实体即可恢复假定开关。\n\n当前传感器：{current_sensor}",
+        "data": {
+          "power_sensor": "电源 binary_sensor",
+          "power_sensor_invert": "反转（传感器 on = 电视关机）"
+        },
+        "data_description": {
+          "power_sensor": "on 表示电视开机，off 表示关机。",
+          "power_sensor_invert": "若该传感器在电视关机时为 on，请勾选。"
         }
       },
       "command": {
@@ -269,7 +295,8 @@
       "invalid_entity": "该实体不是预期的 remote 或 button 域。",
       "invalid_action_type": "请选择 Broadlink 红外或按钮。",
       "invalid_repeats": "重复次数必须是 1 到 10 之间的整数。",
-      "no_commands": "请至少保留一条指令或一个输入源。"
+      "no_commands": "请至少保留一条指令或一个输入源。",
+      "invalid_power_sensor": "请选择 binary_sensor 实体，或不填此项。"
     },
     "abort": {
       "unknown": "出现了未知错误。"

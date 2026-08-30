@@ -16,6 +16,7 @@ except ImportError:  # Home Assistant < 2024.4
 from .actions import (
     copy_config,
     has_useful_config,
+    normalize_power_sensor,
     normalize_source_name,
     parse_action_input,
     validate_source_name,
@@ -31,6 +32,8 @@ from .const import (
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_NAME,
+    CONF_POWER_SENSOR,
+    CONF_POWER_SENSOR_INVERT,
     CONF_SOURCE_NAME,
     CONF_SOURCES,
     DOMAIN,
@@ -51,6 +54,7 @@ from .flow_schemas import (
     name_schema,
     options_group_schema,
     power_mode_schema,
+    power_sensor_schema,
     source_ask_schema,
     source_name_schema,
     source_pick_schema,
@@ -78,11 +82,15 @@ class TelevisionFlowMixin:
             CONF_SOURCES: [],
             CONF_DEFAULT_REMOTE: None,
             CONF_DEFAULT_DEVICE: None,
+            CONF_POWER_SENSOR: None,
+            CONF_POWER_SENSOR_INVERT: False,
         }
         if CONF_COMMANDS not in self._data or self._data[CONF_COMMANDS] is None:
             self._data[CONF_COMMANDS] = {}
         if CONF_SOURCES not in self._data or self._data[CONF_SOURCES] is None:
             self._data[CONF_SOURCES] = []
+        self._data.setdefault(CONF_POWER_SENSOR, None)
+        self._data.setdefault(CONF_POWER_SENSOR_INVERT, False)
         self._queue = []
         self._after_queue = "volume_select"
         self._source_draft = {}
@@ -104,6 +112,7 @@ class TelevisionFlowMixin:
             "channel_select": self.async_step_channel_select,
             "nav_select": self.async_step_nav_select,
             "source_ask": self.async_step_source_ask,
+            "power_sensor": self.async_step_power_sensor,
             "options_menu": self.async_step_init,
             "source_finish_add": self._finish_source_add,
             "source_finish_edit": self._finish_source_edit,
@@ -149,16 +158,16 @@ class TelevisionFlowMixin:
             if mode == POWER_MODE_SKIP:
                 if self._options_mode:
                     return await self.async_step_init()
-                return await self.async_step_volume_select()
+                return await self.async_step_power_sensor()
             if mode == POWER_MODE_TOGGLE:
                 self._queue_commands(
                     [CMD_POWER_TOGGLE],
-                    "options_menu" if self._options_mode else "volume_select",
+                    "options_menu" if self._options_mode else "power_sensor",
                 )
             else:
                 self._queue_commands(
                     [CMD_TURN_ON, CMD_TURN_OFF],
-                    "options_menu" if self._options_mode else "volume_select",
+                    "options_menu" if self._options_mode else "power_sensor",
                 )
             return await self.async_step_command()
 
@@ -167,6 +176,37 @@ class TelevisionFlowMixin:
             data_schema=power_mode_schema(current),
             description_placeholders={
                 "current": current_mappings_text(commands, POWER_COMMANDS),
+            },
+        )
+
+    async def async_step_power_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Optional binary_sensor for real on/off feedback."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            sensor, error = normalize_power_sensor(user_input.get(CONF_POWER_SENSOR))
+            if error:
+                errors["base"] = error
+            else:
+                self._data[CONF_POWER_SENSOR] = sensor
+                self._data[CONF_POWER_SENSOR_INVERT] = bool(
+                    user_input.get(CONF_POWER_SENSOR_INVERT)
+                )
+                if self._options_mode:
+                    return await self.async_step_init()
+                return await self.async_step_volume_select()
+
+        current = self._data.get(CONF_POWER_SENSOR)
+        return self.async_show_form(
+            step_id="power_sensor",
+            data_schema=power_sensor_schema(
+                current,
+                bool(self._data.get(CONF_POWER_SENSOR_INVERT)),
+            ),
+            errors=errors,
+            description_placeholders={
+                "current_sensor": current or "—",
             },
         )
 
@@ -589,6 +629,7 @@ class IRTelevisionOptionsFlow(TelevisionFlowMixin, OptionsFlow):
                 "name",
                 "defaults",
                 "power",
+                "power_sensor",
                 "volume",
                 "playback",
                 "channel",
@@ -600,6 +641,7 @@ class IRTelevisionOptionsFlow(TelevisionFlowMixin, OptionsFlow):
                 "name": self._data.get(CONF_NAME) or self._entry().title,
                 "command_count": str(len(self._data[CONF_COMMANDS])),
                 "source_count": str(len(self._data[CONF_SOURCES])),
+                "power_sensor": self._data.get(CONF_POWER_SENSOR) or "—",
             },
         )
 
@@ -628,6 +670,13 @@ class IRTelevisionOptionsFlow(TelevisionFlowMixin, OptionsFlow):
         """Reconfigure power from the options menu."""
         self._ensure()
         return await self.async_step_power_mode(user_input)
+
+    async def async_step_power_sensor(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Reconfigure the power binary_sensor from the options menu."""
+        self._ensure()
+        return await super().async_step_power_sensor(user_input)
 
     async def async_step_defaults(
         self, user_input: dict[str, Any] | None = None

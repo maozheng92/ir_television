@@ -11,7 +11,7 @@ A Home Assistant custom integration that exposes a dumb IR television as a **Tel
 ### 它是什么
 
 - 平台：`media_player`，设备类别 `tv`（iOS 遥控器小组件只认这类实体）
-- 乐观 / 假定状态：红外电视通常没有回读，开关、静音、当前源会在本地更新
+- 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
 - 可自定义输入源（HDMI 1、HDMI 2、电视、Netflix…）
 - 方向键、返回、主页、菜单、信息：配置后会出现在**同一设备**上的额外 `button` 实体，方便仪表盘；**iOS 小组件只用下面的 media_player 功能**
 
@@ -65,9 +65,10 @@ Companion 的 Remote Widget / 控制中心遥控器会寻找：
    1. 给电视起名
    2. （可选）选择默认 Broadlink `remote.*` 和设备名
    3. 电源：独立开关，或单键切换
-   4. 音量 / 静音、播放、频道
-   5. （可选）方向键与菜单 → 额外按钮实体
-   6. 循环添加输入源，完成后结束
+   4. （可选）选择一个 `binary_sensor` 作为电源状态回读
+   5. 音量 / 静音、播放、频道
+   6. （可选）方向键与菜单 → 额外按钮实体
+   7. 循环添加输入源，完成后结束
 
 之后可在集成卡片上点 **配置** 修改名称、指令和源（无需删除重建）。保存后会自动重新加载实体。
 
@@ -97,6 +98,20 @@ Broadlink 实体暂时不可用时，本集成**不会崩溃**，只会在日志
 3. 运行时调用 `button.press`
 
 同一台电视可以混用：电源走红外，某个输入源走按钮。
+
+### 用 binary_sensor 做状态回读
+
+红外电视默认没有电源反馈。如果你有一个能反映电视是否开机的 `binary_sensor`（例如测量电视插头的电流/功率、HDMI-CEC 电源、或模板二进制传感器），可以在向导里把它指定为**电源状态传感器**：
+
+- 传感器 `on` → 电视开机；`off` → 电视关机
+- 若逻辑相反（`on` 表示关机），勾选**反转**
+- 配置后，该 `media_player` 的电源不再是假定状态；传感器变化会立刻更新实体
+- 发送开/关指令后仍会先乐观更新，随后以传感器为准纠正（红外没打到时会自动回到真实状态）
+- 音量、播放、切源在配置了传感器时**不会**再把电视假定为开机
+- 传感器为 `unavailable` / `unknown` 时保留上一次明确状态，媒体播放器仍可控制
+- 清空该字段即恢复假定开关。静音和当前输入源仍是本地乐观状态
+
+之后可在集成 **配置 → 电源状态传感器** 中修改或移除。
 
 ### 自定义输入源
 
@@ -135,7 +150,8 @@ Broadlink 实体暂时不可用时，本集成**不会崩溃**，只会在日志
 
 A HACS-ready custom component (`custom_components/ir_television`) that creates one TV device with:
 
-- A `media_player` (`MediaPlayerDeviceClass.TV`, assumed state)
+- A `media_player` (`MediaPlayerDeviceClass.TV`)
+- Optional `binary_sensor` for real power feedback (otherwise assumed on/off)
 - Optional extra `button` entities for d-pad / back / home / menu / info
 - Config Flow + Options Flow (`en` and `zh-Hans`)
 
@@ -145,7 +161,7 @@ It does **not** talk to the TV over HDMI-CEC or a network API. It fires commands
 
 The Companion Remote widget looks for a `media_player` with `device_class=tv` and standard features (`TURN_ON` / `TURN_OFF`, `VOLUME_STEP`, `VOLUME_MUTE`, `PLAY` / `PAUSE`, `NEXT_TRACK` / `PREVIOUS_TRACK`, `SELECT_SOURCE`). This integration advertises **only** the features you actually mapped, so unused widget buttons stay hidden.
 
-Assumed on/off (and mute / source) updates when a command is sent. After a restart, the last state is restored if Home Assistant still has it.
+Assumed on/off (and mute / source) updates when a command is sent. After a restart, the last state is restored if Home Assistant still has it. If you assign a power `binary_sensor`, power follows that sensor instead (`assumed_state` is then false for this entity).
 
 ### Prerequisites
 
@@ -169,9 +185,10 @@ Wizard:
 1. Name the TV  
 2. Optional default Broadlink `remote.*` + device name  
 3. Power (on/off or one toggle key)  
-4. Volume / mute, playback, channel  
-5. Optional navigation keys (extra buttons, not the iOS widget)  
-6. Add sources in a loop  
+4. Optional power `binary_sensor`  
+5. Volume / mute, playback, channel  
+6. Optional navigation keys (extra buttons, not the iOS widget)  
+7. Add sources in a loop  
 
 **Configure** on the integration entry to edit later. Save reloads the entity.
 
@@ -182,6 +199,10 @@ Pick **Broadlink IR**, a `remote.*` entity, the Broadlink **device** name, and t
 ### Map buttons
 
 Pick **Button entity** and a `button.*`. The integration calls `button.press`.
+
+### Power feedback (`binary_sensor`)
+
+Optional. Point the wizard at a `binary_sensor` that is `on` when the TV is on (smart plug / current clamp / HDMI-CEC / template). Invert if the logic is reversed. Power then tracks the sensor instead of assumed state; mute and source stay optimistic. Clear the field to return to assumed on/off.
 
 ### Custom sources
 

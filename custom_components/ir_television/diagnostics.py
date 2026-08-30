@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .actions import compute_supported_features
-from .const import CONF_COMMANDS, CONF_SOURCES
+from .const import CONF_COMMANDS, CONF_POWER_SENSOR, CONF_SOURCES
 
 TO_REDACT = {"unique_id"}
 
@@ -32,6 +32,7 @@ async def async_get_config_entry_diagnostics(
         ),
         "supported_features": compute_supported_features(commands, sources),
         "command_keys": sorted(commands.keys()),
+        "power_sensor": entry.data.get(CONF_POWER_SENSOR),
         "source_names": [
             src.get("name") for src in sources if isinstance(src, dict)
         ],

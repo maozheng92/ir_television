@@ -34,6 +34,8 @@ from .const import (
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
     CONF_NUM_REPEATS,
+    CONF_POWER_SENSOR,
+    CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
     FEATURE_NEXT_TRACK,
     FEATURE_PAUSE,
@@ -330,6 +332,11 @@ def copy_config(data: dict[str, Any]) -> dict[str, Any]:
     """Deep-ish copy of integration config stored on the config entry."""
     commands = data.get("commands") or {}
     sources = data.get("sources") or []
+    sensor = data.get(CONF_POWER_SENSOR) or None
+    if isinstance(sensor, str):
+        sensor = sensor.strip() or None
+    else:
+        sensor = None
     return {
         "name": data.get("name", ""),
         "commands": {key: dict(value) for key, value in commands.items() if value},
@@ -343,4 +350,41 @@ def copy_config(data: dict[str, Any]) -> dict[str, Any]:
         ],
         CONF_DEFAULT_REMOTE: data.get(CONF_DEFAULT_REMOTE),
         CONF_DEFAULT_DEVICE: data.get(CONF_DEFAULT_DEVICE),
+        CONF_POWER_SENSOR: sensor,
+        CONF_POWER_SENSOR_INVERT: bool(data.get(CONF_POWER_SENSOR_INVERT)),
     }
+
+
+_SENSOR_ON = "on"
+_SENSOR_OFF = "off"
+_SENSOR_UNKNOWN = {"unavailable", "unknown", "none", ""}
+
+
+def power_is_on_from_sensor(state: str | None, *, invert: bool = False) -> bool | None:
+    """Map a binary_sensor state to TV power.
+
+    Returns True/False when the sensor reports a clear on/off, else None
+    (unavailable, unknown, or missing). invert=True means sensor on = TV off.
+    """
+    if state is None:
+        return None
+    value = str(state).strip().lower()
+    if value in _SENSOR_UNKNOWN or value not in (_SENSOR_ON, _SENSOR_OFF):
+        return None
+    is_on = value == _SENSOR_ON
+    return (not is_on) if invert else is_on
+
+
+def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | None]:
+    """Validate an optional binary_sensor entity id.
+
+    Returns (entity_id_or_none, error_key).
+    """
+    if not entity_id:
+        return None, None
+    cleaned = str(entity_id).strip()
+    if not cleaned:
+        return None, None
+    if not cleaned.startswith("binary_sensor."):
+        return None, "invalid_power_sensor"
+    return cleaned, None
