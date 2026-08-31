@@ -17,13 +17,21 @@ from .const import (
     ATTR_NAME,
     ATTR_NUM_REPEATS,
     ATTR_TYPE,
+    CMD_BACK,
+    CMD_DOWN,
+    CMD_HOME,
+    CMD_INFO,
+    CMD_LEFT,
+    CMD_OK,
     CMD_PAUSE,
     CMD_PLAY,
     CMD_PLAY_PAUSE,
     CMD_POWER_TOGGLE,
+    CMD_RIGHT,
     CMD_STOP,
     CMD_TURN_OFF,
     CMD_TURN_ON,
+    CMD_UP,
     CMD_VOLUME_DOWN,
     CMD_VOLUME_MUTE,
     CMD_VOLUME_UP,
@@ -37,6 +45,7 @@ from .const import (
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
+    DEFAULT_SOURCE_NAME,
     FEATURE_NEXT_TRACK,
     FEATURE_PAUSE,
     FEATURE_PLAY,
@@ -96,8 +105,9 @@ def compute_supported_features(
         features |= FEATURE_NEXT_TRACK
     if _has_action(commands, INTENT_PREVIOUS):
         features |= FEATURE_PREVIOUS_TRACK
-    if build_source_list(sources):
-        features |= FEATURE_SELECT_SOURCE
+    # Always advertise SELECT_SOURCE so HomeKit creates CHAR_ACTIVE_IDENTIFIER
+    # and Input Source services (required for the iOS Control Center Remote).
+    features |= FEATURE_SELECT_SOURCE
     return features
 
 
@@ -166,6 +176,71 @@ def resolve_command_key(commands: dict[str, Any] | None, intent: str) -> str | N
     return None
 
 
+# HomeKit Television REMOTE_KEYS → stored command keys (see homekit/const.py).
+# Fallbacks are applied in resolve_homekit_remote_key.
+HOMEKIT_REMOTE_KEY_COMMANDS: dict[str, str] = {
+    "arrow_up": CMD_UP,
+    "arrow_down": CMD_DOWN,
+    "arrow_left": CMD_LEFT,
+    "arrow_right": CMD_RIGHT,
+    "select": CMD_OK,
+    "back": CMD_BACK,
+    "information": CMD_INFO,
+    "next_track": INTENT_NEXT,
+    "previous_track": INTENT_PREVIOUS,
+}
+
+
+def resolve_homekit_remote_key(
+    commands: dict[str, Any] | None, key_name: str | None
+) -> str | None:
+    """Map a HomeKit ``key_name`` to a configured IR/button command key.
+
+    HomeKit fires ``homekit_tv_remote_key_pressed`` with names such as
+    ``arrow_up``, ``select``, ``exit``, ``play_pause``. Returns the stored
+    command key to send, or None if nothing is mapped.
+
+    Fallbacks:
+    - play_pause → play, then pause
+    - exit / home → home, then back
+    - rewind → previous_track, then left
+    - fast_forward → next_track, then right
+    """
+    commands = commands or {}
+    key = (key_name or "").strip().lower()
+    if not key:
+        return None
+
+    if key == "play_pause":
+        for candidate in (CMD_PLAY_PAUSE, CMD_PLAY, CMD_PAUSE):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    if key in ("exit", "home"):
+        for candidate in (CMD_HOME, CMD_BACK):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    if key == "rewind":
+        for candidate in (INTENT_PREVIOUS, CMD_LEFT):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    if key == "fast_forward":
+        for candidate in (INTENT_NEXT, CMD_RIGHT):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    mapped = HOMEKIT_REMOTE_KEY_COMMANDS.get(key)
+    if mapped and _has_action(commands, mapped):
+        return mapped
+    return None
+
+
 def normalize_source_name(name: str | None) -> str:
     """Strip surrounding whitespace from a source name."""
     return (name or "").strip()
@@ -190,8 +265,8 @@ def validate_source_name(
     return None
 
 
-def build_source_list(sources: list[Any] | None) -> list[str]:
-    """Return display names for configured sources."""
+def _configured_source_names(sources: list[Any] | None) -> list[str]:
+    """Return display names the user actually configured (may be empty)."""
     names: list[str] = []
     for source in sources or []:
         if not isinstance(source, dict):
@@ -200,6 +275,15 @@ def build_source_list(sources: list[Any] | None) -> list[str]:
         if name:
             names.append(name)
     return names
+
+
+def build_source_list(sources: list[Any] | None) -> list[str]:
+    """Return display names for sources.
+
+    Always includes at least ``DEFAULT_SOURCE_NAME`` ("TV") so HomeKit can
+    create Input Source services even when the user added none.
+    """
+    return _configured_source_names(sources) or [DEFAULT_SOURCE_NAME]
 
 
 def find_source(sources: list[SourceDict] | None, name: str) -> SourceDict | None:
@@ -214,11 +298,15 @@ def find_source(sources: list[SourceDict] | None, name: str) -> SourceDict | Non
 
 
 def has_useful_config(commands: dict[str, Any] | None, sources: list[Any] | None) -> bool:
-    """True if at least one command or source is configured."""
+    """True if at least one command or user-configured source is set.
+
+    The implicit default "TV" source does not count — the user must still
+    map at least one IR/button command or a real HDMI/app source.
+    """
     commands = commands or {}
     if any(_has_action(commands, key) for key in commands):
         return True
-    return bool(build_source_list(sources))
+    return bool(_configured_source_names(sources))
 
 
 def action_is_valid(action: Any) -> bool:

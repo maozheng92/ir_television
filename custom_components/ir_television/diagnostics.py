@@ -8,7 +8,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .actions import compute_supported_features
+from .actions import build_source_list, compute_supported_features
 from .const import CONF_COMMANDS, CONF_POWER_SENSOR, CONF_SOURCES
 
 TO_REDACT = {"unique_id"}
@@ -36,4 +36,5 @@ async def async_get_config_entry_diagnostics(
         "source_names": [
             src.get("name") for src in sources if isinstance(src, dict)
         ],
+        "effective_source_list": build_source_list(sources),
     }

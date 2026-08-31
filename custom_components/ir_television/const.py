@@ -5,6 +5,14 @@ from __future__ import annotations
 DOMAIN = "ir_television"
 PLATFORMS = ["media_player", "button"]
 
+# Shown when the user configured no HDMI / app sources. HomeKit needs at least
+# one Input Source (CHAR_ACTIVE_IDENTIFIER) for the Control Center Remote.
+DEFAULT_SOURCE_NAME = "TV"
+
+# Fired by HA HomeKit TelevisionMediaPlayer when the iOS Control Center Remote
+# sends a D-pad / menu key (see homeassistant.components.homekit).
+EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED = "homekit_tv_remote_key_pressed"
+
 MANUFACTURER = "IR Television"
 MODEL = "IR / Button TV"
 

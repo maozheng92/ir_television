@@ -60,7 +60,7 @@
       },
       "volume_select": {
         "title": "Volume",
-        "description": "Select the volume keys this TV should expose to Home Assistant and the iOS Remote widget. Leave empty to skip. Current mappings:\n{current}",
+        "description": "Select the volume keys this TV should expose to Home Assistant and the Apple Control Center Remote (HomeKit). Leave empty to skip. Current mappings:\n{current}",
         "data": {
           "commands": "Volume commands"
         }
@@ -74,28 +74,28 @@
       },
       "channel_select": {
         "title": "Channel / tracks",
-        "description": "These become Next / Previous on the iOS Remote widget (channel up/down or track skip). Current mappings:\n{current}",
+        "description": "These become Next / Previous on the Apple Control Center Remote (channel up/down or track skip). Current mappings:\n{current}",
         "data": {
           "commands": "Channel commands"
         }
       },
       "nav_select": {
         "title": "Direction pad and menu keys",
-        "description": "These do **not** appear on the iOS Remote widget. They become extra button entities on the same TV device for dashboards and automations. Current mappings:\n{current}",
+        "description": "Map these so the Apple Control Center Remote D-pad works (HomeKit `homekit_tv_remote_key_pressed`). They also become extra button entities on the same TV device for dashboards. Current mappings:\n{current}",
         "data": {
           "commands": "Navigation keys"
         }
       },
       "source_ask": {
         "title": "Input sources",
-        "description": "Sources appear in `source_list` and in the iOS source picker (HDMI 1, Netflix, …). Configured sources ({source_count}): {source_names}",
+        "description": "Sources appear in `source_list` and in the Apple Home / Control Center Remote source picker (HDMI 1, Netflix, …). If you add none, a default **TV** source is still advertised so HomeKit can create the Remote. Configured sources ({source_count}): {source_names}",
         "data": {
           "add_source": "Add a source"
         }
       },
       "source_add": {
         "title": "New source",
-        "description": "Display name shown in Home Assistant and on the iOS Remote source list.",
+        "description": "Display name shown in Home Assistant and on the Apple Control Center Remote source list.",
         "data": {
           "source_name": "Source name"
         }
@@ -221,7 +221,7 @@
       },
       "navigation": {
         "title": "Direction pad and menu keys",
-        "description": "These become extra button entities on the TV device. They are not used by the iOS Remote widget.\n{current}",
+        "description": "These are sent by the Apple Control Center Remote (HomeKit D-pad) and also become extra button entities on the TV device.\n{current}",
         "data": {
           "up": "Up",
           "down": "Down",

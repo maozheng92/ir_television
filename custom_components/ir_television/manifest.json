@@ -1,10 +1,11 @@
 {
   "domain": "ir_television",
   "name": "红外电视 IR Television",
+  "after_dependencies": ["homekit"],
   "codeowners": [],
   "config_flow": true,
   "integration_type": "device",
   "iot_class": "assumed_state",
   "requirements": [],
-    "version": "1.2.1"
+  "version": "1.3.0"
 }

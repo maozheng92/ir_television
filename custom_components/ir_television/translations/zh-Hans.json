@@ -60,7 +60,7 @@
       },
       "volume_select": {
         "title": "音量",
-        "description": "选择要提供给 Home Assistant 和 iOS 遥控器小组件的音量按键。不选则跳过。当前映射：\n{current}",
+        "description": "选择要提供给 Home Assistant 和 iOS 控制中心「隔空播放遥控器 / Apple TV Remote」（HomeKit）的音量按键。不选则跳过。当前映射：\n{current}",
         "data": {
           "commands": "音量指令"
         }
@@ -74,28 +74,28 @@
       },
       "channel_select": {
         "title": "频道 / 曲目",
-        "description": "对应 iOS 遥控器小组件上的下一首 / 上一首（频道加减或切歌）。当前映射：\n{current}",
+        "description": "对应 iOS 控制中心遥控器上的下一首 / 上一首（频道加减或切歌）。当前映射：\n{current}",
         "data": {
           "commands": "频道指令"
         }
       },
       "nav_select": {
         "title": "方向键与菜单",
-        "description": "这些按键**不会**出现在 iOS 遥控器小组件上。它们会作为同一电视设备上的额外按钮实体，供仪表盘和自动化使用。当前映射：\n{current}",
+        "description": "请映射这些按键，iOS 控制中心遥控器的方向键才会工作（HomeKit 事件 `homekit_tv_remote_key_pressed`）。它们同时会作为同一电视设备上的额外按钮实体，供仪表盘使用。当前映射：\n{current}",
         "data": {
           "commands": "导航按键"
         }
       },
       "source_ask": {
         "title": "输入源",
-        "description": "输入源会出现在 `source_list` 和 iOS 源选择器中（HDMI 1、Netflix 等）。已配置（{source_count}）：{source_names}",
+        "description": "输入源会出现在 `source_list` 以及 Apple 家庭 / 控制中心遥控器的源列表中（HDMI 1、Netflix 等）。若不添加任何源，仍会自动暴露一个默认的 **TV** 源，以便 HomeKit 能创建遥控器。已配置（{source_count}）：{source_names}",
         "data": {
           "add_source": "再添加一个输入源"
         }
       },
       "source_add": {
         "title": "新输入源",
-        "description": "显示名称会出现在 Home Assistant 和 iOS 遥控器的源列表中。",
+        "description": "显示名称会出现在 Home Assistant 和 iOS 控制中心遥控器的源列表中。",
         "data": {
           "source_name": "输入源名称"
         }
@@ -221,7 +221,7 @@
       },
       "navigation": {
         "title": "方向键与菜单",
-        "description": "这些会成为电视设备上的额外按钮实体，不会用于 iOS 遥控器小组件。\n{current}",
+        "description": "这些按键由 iOS 控制中心遥控器（HomeKit 方向键）发送，同时会成为电视设备上的额外按钮实体。\n{current}",
         "data": {
           "up": "上",
           "down": "下",

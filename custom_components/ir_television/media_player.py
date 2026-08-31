@@ -1,4 +1,4 @@
-"""Television media_player — device_class TV for the iOS Remote widget."""
+"""Television media_player — device_class TV for Apple HomeKit / Control Center Remote."""
 
 from __future__ import annotations
 
@@ -22,8 +22,10 @@ from .actions import (
     build_source_list,
     compute_supported_features,
     find_source,
+    normalize_source_name,
     power_is_on_from_sensor,
     resolve_command_key,
+    resolve_homekit_remote_key,
 )
 from .command_sender import async_send_action
 from .const import (
@@ -34,6 +36,7 @@ from .const import (
     CONF_POWER_SENSOR_INVERT,
     CONF_SOURCES,
     DOMAIN,
+    EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED,
     INTENT_PAUSE,
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
@@ -138,9 +141,9 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         return self._source
 
     @property
-    def source_list(self) -> list[str] | None:
-        names = build_source_list(self._sources())
-        return names or None
+    def source_list(self) -> list[str]:
+        """Always at least one input so HomeKit creates Input Source services."""
+        return build_source_list(self._sources())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -210,6 +213,11 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             if attrs.get("source"):
                 self._source = str(attrs["source"])
 
+        if not self._source:
+            names = build_source_list(self._sources())
+            if names:
+                self._source = names[0]
+
         sensor = self._power_sensor
         if sensor:
             self.async_on_remove(
@@ -218,6 +226,13 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
                 )
             )
             self._sync_from_power_sensor()
+
+        self.async_on_remove(
+            self.hass.bus.async_listen(
+                EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED,
+                self._async_homekit_tv_remote_key,
+            )
+        )
 
     async def _async_fire(self, intent: str) -> bool:
         commands = self._commands()
@@ -312,16 +327,50 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             self._mark_on_from_command()
             self.async_write_ha_state()
 
-    async def async_select_source(self, source: str) -> None:
-        match = find_source(self._sources(), source)
-        if match is None:
-            _LOGGER.warning(
-                "IR Television '%s': unknown source '%s'",
+    async def _async_homekit_tv_remote_key(self, event: Event) -> None:
+        """Map Apple Control Center Remote keys to configured IR/button commands."""
+        data = event.data or {}
+        if data.get("entity_id") != self.entity_id:
+            return
+        key_name = data.get("key_name")
+        commands = self._commands()
+        cmd_key = resolve_homekit_remote_key(commands, key_name)
+        if cmd_key is None:
+            _LOGGER.debug(
+                "IR Television '%s': HomeKit remote key '%s' is not mapped; ignoring",
                 self._entry.title,
-                source,
+                key_name,
             )
             return
-        if await async_send_action(self.hass, match.get(ATTR_ACTION), f"source:{source}"):
-            self._source = match.get("name") or source
+        if await async_send_action(
+            self.hass, commands.get(cmd_key), f"homekit:{key_name}"
+        ):
             self._mark_on_from_command()
             self.async_write_ha_state()
+
+    async def async_select_source(self, source: str) -> None:
+        match = find_source(self._sources(), source)
+        if match is not None:
+            if await async_send_action(
+                self.hass, match.get(ATTR_ACTION), f"source:{source}"
+            ):
+                self._source = match.get("name") or source
+                self._mark_on_from_command()
+                self.async_write_ha_state()
+            return
+
+        # Implicit default source (e.g. "TV") has no IR action — just remember it
+        # so HomeKit CHAR_ACTIVE_IDENTIFIER stays in sync.
+        target = normalize_source_name(source).lower()
+        for name in build_source_list(self._sources()):
+            if name.lower() == target:
+                self._source = name
+                self._mark_on_from_command()
+                self.async_write_ha_state()
+                return
+
+        _LOGGER.warning(
+            "IR Television '%s': unknown source '%s'",
+            self._entry.title,
+            source,
+        )

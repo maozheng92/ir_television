@@ -57,6 +57,7 @@ INTENT_PLAY_PAUSE = const.INTENT_PLAY_PAUSE
 INTENT_TOGGLE = const.INTENT_TOGGLE
 INTENT_TURN_OFF = const.INTENT_TURN_OFF
 INTENT_TURN_ON = const.INTENT_TURN_ON
+DEFAULT_SOURCE_NAME = const.DEFAULT_SOURCE_NAME
 
 action_is_valid = actions.action_is_valid
 build_button_service_data = actions.build_button_service_data
@@ -71,6 +72,7 @@ parse_action_input = actions.parse_action_input
 parse_broadlink_codes_payload = actions.parse_broadlink_codes_payload
 power_is_on_from_sensor = actions.power_is_on_from_sensor
 resolve_command_key = actions.resolve_command_key
+resolve_homekit_remote_key = actions.resolve_homekit_remote_key
 validate_source_name = actions.validate_source_name
 
 
@@ -90,14 +92,16 @@ def _btn(entity_id: str = "button.tv_ok") -> dict:
 
 
 class FeatureFlagTests(unittest.TestCase):
-    def test_empty(self) -> None:
-        self.assertEqual(compute_supported_features({}, []), 0)
+    def test_empty_still_advertises_select_source(self) -> None:
+        """HomeKit needs SELECT_SOURCE even with no user-configured sources."""
+        self.assertEqual(compute_supported_features({}, []), FEATURE_SELECT_SOURCE)
 
     def test_power_toggle_enables_on_and_off(self) -> None:
         commands = {"power_toggle": _ir("power")}
         bits = compute_supported_features(commands, [])
         self.assertTrue(bits & FEATURE_TURN_ON)
         self.assertTrue(bits & FEATURE_TURN_OFF)
+        self.assertTrue(bits & FEATURE_SELECT_SOURCE)
         self.assertFalse(bits & FEATURE_VOLUME_STEP)
 
     def test_on_off_separate(self) -> None:
@@ -139,6 +143,11 @@ class FeatureFlagTests(unittest.TestCase):
             ["HDMI 1"],
         )
 
+    def test_default_source_when_none_configured(self) -> None:
+        self.assertEqual(build_source_list([]), [DEFAULT_SOURCE_NAME])
+        self.assertEqual(build_source_list(None), [DEFAULT_SOURCE_NAME])
+        self.assertEqual(build_source_list([{"name": "  "}]), [DEFAULT_SOURCE_NAME])
+
 
 class ResolveCommandTests(unittest.TestCase):
     def test_power_toggle_fallback(self) -> None:
@@ -160,6 +169,81 @@ class ResolveCommandTests(unittest.TestCase):
     def test_missing_is_none(self) -> None:
         self.assertIsNone(resolve_command_key({}, INTENT_TURN_ON))
         self.assertIsNone(resolve_command_key({"turn_on": {}}, INTENT_TURN_ON))
+
+
+class HomeKitRemoteKeyTests(unittest.TestCase):
+    def _nav(self) -> dict:
+        return {
+            "up": _ir("up"),
+            "down": _ir("down"),
+            "left": _ir("left"),
+            "right": _ir("right"),
+            "ok": _ir("ok"),
+            "back": _ir("back"),
+            "home": _ir("home"),
+            "info": _ir("info"),
+            "play_pause": _ir("pp"),
+            "next_track": _ir("ch+"),
+            "previous_track": _ir("ch-"),
+        }
+
+    def test_dpad_and_select(self) -> None:
+        commands = self._nav()
+        self.assertEqual(resolve_homekit_remote_key(commands, "arrow_up"), "up")
+        self.assertEqual(resolve_homekit_remote_key(commands, "arrow_down"), "down")
+        self.assertEqual(resolve_homekit_remote_key(commands, "arrow_left"), "left")
+        self.assertEqual(resolve_homekit_remote_key(commands, "arrow_right"), "right")
+        self.assertEqual(resolve_homekit_remote_key(commands, "select"), "ok")
+        self.assertEqual(resolve_homekit_remote_key(commands, "back"), "back")
+        self.assertEqual(resolve_homekit_remote_key(commands, "information"), "info")
+        self.assertEqual(resolve_homekit_remote_key(commands, "next_track"), "next_track")
+        self.assertEqual(
+            resolve_homekit_remote_key(commands, "previous_track"), "previous_track"
+        )
+
+    def test_key_name_is_trimmed_and_case_insensitive(self) -> None:
+        commands = {"up": _ir("up")}
+        self.assertEqual(resolve_homekit_remote_key(commands, "  ARROW_UP  "), "up")
+
+    def test_play_pause_falls_back_to_play_then_pause(self) -> None:
+        self.assertEqual(
+            resolve_homekit_remote_key({"play_pause": _ir("pp")}, "play_pause"),
+            "play_pause",
+        )
+        self.assertEqual(
+            resolve_homekit_remote_key({"play": _ir("play")}, "play_pause"),
+            "play",
+        )
+        self.assertEqual(
+            resolve_homekit_remote_key({"pause": _ir("pause")}, "play_pause"),
+            "pause",
+        )
+        self.assertIsNone(resolve_homekit_remote_key({}, "play_pause"))
+
+    def test_exit_and_home_fall_back_to_back(self) -> None:
+        with_home = {"home": _ir("home"), "back": _ir("back")}
+        self.assertEqual(resolve_homekit_remote_key(with_home, "exit"), "home")
+        self.assertEqual(resolve_homekit_remote_key(with_home, "home"), "home")
+        back_only = {"back": _ir("back")}
+        self.assertEqual(resolve_homekit_remote_key(back_only, "exit"), "back")
+        self.assertEqual(resolve_homekit_remote_key(back_only, "home"), "back")
+        self.assertIsNone(resolve_homekit_remote_key({}, "exit"))
+
+    def test_rewind_and_fast_forward(self) -> None:
+        both = {"next_track": _ir("ch+"), "previous_track": _ir("ch-")}
+        self.assertEqual(resolve_homekit_remote_key(both, "rewind"), "previous_track")
+        self.assertEqual(resolve_homekit_remote_key(both, "fast_forward"), "next_track")
+        arrows = {"left": _ir("left"), "right": _ir("right")}
+        self.assertEqual(resolve_homekit_remote_key(arrows, "rewind"), "left")
+        self.assertEqual(resolve_homekit_remote_key(arrows, "fast_forward"), "right")
+
+    def test_unmapped_or_empty_is_none(self) -> None:
+        commands = self._nav()
+        self.assertIsNone(resolve_homekit_remote_key(commands, "unknown"))
+        self.assertIsNone(resolve_homekit_remote_key(commands, ""))
+        self.assertIsNone(resolve_homekit_remote_key(commands, None))
+        self.assertIsNone(resolve_homekit_remote_key({}, "arrow_up"))
+        self.assertIsNone(resolve_homekit_remote_key({"up": {}}, "arrow_up"))
 
 
 class SourceValidationTests(unittest.TestCase):
