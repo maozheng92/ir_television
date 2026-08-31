@@ -16,38 +16,26 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 
 - 平台：`media_player`，设备类别 `tv`（Apple HomeKit 会把它识别为 `TelevisionMediaPlayer`）
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
-- 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上 `SELECT_SOURCE`（HomeKit 需要 `CHAR_ACTIVE_IDENTIFIER`）
-- 方向键、返回、主页、菜单、信息：配置后会出现在同一设备上的额外 `button` 实体；**同时**由本集成监听 HomeKit 事件 `homekit_tv_remote_key_pressed`，控制中心遥控器的方向键会发红外
+- 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上完整的 Sony Bravia 式功能位（开/关、音量、播放、输入源），HomeKit 才能建成 Television + Speaker
+- 添加或重启后会**自动创建 HomeKit 配件模式条目**（索尼能出遥控器，是因为它在配置 HomeKit 时已经有这条独立配件；后加的红外电视以前会被主桥跳过）
+- 方向键、返回、主页、菜单、信息：配置后会出现诊断类 `button`（不进 HomeKit）；**同时**监听 `homekit_tv_remote_key_pressed`
 
-### 为什么 iOS 控制中心遥控器会出现
+### 为什么索尼可以显示、红外电视以前不行
 
 这是 **系统控制中心 → 隔空播放遥控器 / Apple TV Remote**，不是 Companion 主屏幕小组件。
 
-Apple 只会在以下条件都满足时显示该遥控器：
+官方 **Sony Bravia TV** 集成会：
 
-1. 实体看起来像真正的 HomeKit 电视：`device_class=tv`、`source_list` 至少一个输入源、`supported_features` 含 `SELECT_SOURCE`，以及已映射的开/关等功能。
-2. 通过 Home Assistant 的 **HomeKit 桥接** 暴露；Apple **要求电视作为独立配件（accessory 模式）**，不能混在主桥里。必须在「家庭」App 里**单独配对**这个电视配件。
-3. 在 iPhone 上启用 **控制中心 → 隔空播放遥控器 / 遥控器**。
+1. **始终**声明一整套电视功能位（`TURN_ON/OFF`、`VOLUME_STEP/MUTE/SET`、`PLAY/PAUSE`、`SELECT_SOURCE` 等），HomeKit 据此创建 Television 配件。
+2. 在第一次配置 HomeKit 并勾选 `media_player` 域时，自动得到一条 **配件模式** 条目，再在「家庭」里单独配对。
 
-本集成会：
+红外电视如果是后来才加的，HomeKit **不会**再为它建配件（主桥还会把电视排除掉），所以控制中心没有遥控器。本版本会自己发起与索尼相同的配件配对流程，并把功能位对齐索尼。
 
-| 条件 | 本集成的行为 |
-| --- | --- |
-| `device_class=tv` | 始终为 `MediaPlayerDeviceClass.TV` |
-| 至少一个输入源 | 用户未添加源时使用默认 **TV** |
-| `SELECT_SOURCE` | 始终加入 `supported_features` |
-| 方向键 | 监听 `homekit_tv_remote_key_pressed` 并映射到已配置的红外/按钮 |
+Apple 显示遥控器仍需要：
 
-其它功能位仍按你映射的指令动态计算：
-
-| 功能 | 需要映射的指令 |
-| --- | --- |
-| 开 / 关 | `turn_on` / `turn_off`，或单独的 `power_toggle` |
-| 音量加减 | `volume_up` / `volume_down` |
-| 静音 | `volume_mute` |
-| 播放 / 暂停 | `play`、`pause`，或只有一个 `play_pause` |
-| 停止 | `stop`（可选） |
-| 下一首 / 上一首 | `next_track` / `previous_track`（频道加减或切歌） |
+1. 实体是 `device_class=tv` 的完整 Television（本集成现在始终如此）。
+2. 在「家庭」App 里**单独配对**这条电视配件（不要只配对主桥）。
+3. iPhone：**设置 → 控制中心** 打开 **隔空播放遥控器 / 遥控器**。
 
 HomeKit 方向键映射（未映射则忽略）：
 
@@ -86,27 +74,16 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 设置 → 设备与服务 → 添加集成 → 搜索 **红外电视** / **IR Television**。至少映射电源；方向键请映射上/下/左/右/确定/返回，控制中心遥控器的 D-pad 才会发红外。输入源可选（不填也会有默认 **TV**）。
 
-**3. 用 HomeKit 配件模式暴露这台电视（必须单独配对）**
+**3. 配对 HomeKit 电视配件（和索尼一样，必须单独扫码）**
 
-Apple 不允许把电视混在主 HomeKit 桥里。
+更新本集成并**完整重启**后，会自动出现一条新的 **HomeKit 配件**（设置 → 设备与服务里多一个 HomeKit 条目，名称是这台电视）。
 
-快捷做法（推荐）：
+1. 打开该 HomeKit 条目上的 **配对二维码 / PIN**
+2. iPhone **家庭** App → 添加配件 → 扫描**这个电视配件**（**不要**扫「Home Assistant Bridge」主桥，索尼也是单独那条）
+3. 放进房间并完成设置
+4. 若以前把这台 `media_player` 当开关加进过主桥：在家庭 App 里删掉旧设备，并在 HA 里删掉旧 HomeKit 配件后重启，让本集成重建
 
-1. 设置 → 设备与服务 → 添加集成 → **HomeKit 桥接**
-2. 选择包含 `media_player` 的域（或只包含这台电视）
-3. 完成向导。Home Assistant 会为必须走 **配件模式** 的电视**自动再创建一个独立的 HomeKit 条目**
-4. 在前端通知或该 HomeKit 条目上查看 **配对二维码 / PIN**
-5. iPhone 打开 **家庭** App → 添加配件 → 扫描该电视配件的二维码（**不是**主桥的码）
-6. 把它放进房间并完成设置
-
-只添加这一台电视时：
-
-1. 新建一个 HomeKit 桥接，**配对前**打开选项
-2. 把模式改成 **accessory（配件）**
-3. 只选择这台 `media_player.*` 电视实体
-4. 在「家庭」App 中配对该配件
-
-若电视以前被当成普通开关暴露过：从 HomeKit 里移除后重新添加，或对实体执行 `homekit.reset_accessory`。
+自动创建失败时，前端会有持久通知。手动做法：添加 **HomeKit 桥接** → 配对前改成 **配件 (accessory)** → 只选这台 `media_player.*`。
 
 **4. 打开控制中心遥控器**
 
@@ -183,26 +160,26 @@ Broadlink 实体暂时不可用时，本集成**不会崩溃**，只会在日志
 
 A HACS-ready custom component (`custom_components/ir_television`) that creates one TV device with:
 
-- A `media_player` (`MediaPlayerDeviceClass.TV`)
-- A default **TV** input source when you configured none, and **always** `SELECT_SOURCE` (HomeKit `CHAR_ACTIVE_IDENTIFIER`)
+- A `media_player` (`MediaPlayerDeviceClass.TV`) with the same core feature bits as official **Sony Bravia** (`TURN_ON/OFF`, volume step/mute/set, play/pause, `SELECT_SOURCE`)
+- A default **TV** input source when you configured none
+- Automatic **HomeKit accessory-mode** pairing (Sony appears in Control Center because it already has that standalone accessory; a TV added later used to be skipped)
 - A listener for `homekit_tv_remote_key_pressed` so Control Center D-pad keys fire IR
 - Optional `binary_sensor` for real power feedback
-- Optional extra `button` entities for d-pad / back / home / menu / info
+- Optional diagnostic `button` entities for d-pad / back / home / menu / info (hidden from HomeKit)
 - Config Flow + Options Flow (`en` and `zh-Hans`)
 
 It does **not** talk to the TV over HDMI-CEC or a network API. It fires commands you already have in Home Assistant.
 
-### Why the iOS Remote appears
+### Why Sony shows in the iOS Remote and this TV did not
 
 This is the **Apple Control Center → Apple TV Remote / Remote**, not the Home Assistant Companion home-screen widget.
 
-Home Assistant HomeKit exposes `media_player` + `device_class=tv` as HomeKit `TelevisionMediaPlayer`. The Control Center Remote appears only after:
+Official **Sony Bravia TV** always advertises a full Television feature set, and HomeKit created an **accessory-mode** entry when the bridge was first set up with the `media_player` domain. TVs added later are excluded from the bridge and never get a pairing QR — so Control Center never lists them. This integration now starts that same accessory flow and matches Sony's feature bits.
 
-1. The entity looks like a real HomeKit TV: `device_class=tv`, `source_list` with at least one input, `SELECT_SOURCE` in `supported_features`, plus power features if mapped.
-2. You expose it via **HomeKit Bridge**. Apple requires TVs as **separate accessories** (accessory mode), not mixed in the main bridge. Pair that TV accessory in the Apple Home app **separately**.
-3. You enable Control Center → Apple TV Remote / Remote.
+You still need to:
 
-This integration always advertises a source list (default `"TV"`) and `SELECT_SOURCE`. D-pad keys from HomeKit map to your IR/button commands.
+1. Pair **that TV accessory** in the Apple Home app (not the main HA bridge).
+2. Enable Control Center → Apple TV Remote / Remote.
 
 ### Make the Remote appear
 
@@ -216,22 +193,9 @@ Copy the folder `custom_components/ir_television` to `<config>/custom_components
 
 **Settings → Devices & Services → Add Integration → IR Television**. Map power at minimum. Map up/down/left/right/ok/back if you want the Control Center D-pad to send IR. Custom sources are optional.
 
-**3. Expose the TV in HomeKit accessory mode**
+**3. Pair the HomeKit TV accessory**
 
-Apple does not allow TVs on the main HomeKit bridge.
-
-Quick path:
-
-1. Settings → Devices & services → Add integration → **HomeKit Bridge**
-2. Include `media_player` (or only this TV)
-3. Finish the flow. Home Assistant creates an extra HomeKit **accessory** entry for the TV
-4. Open the pairing QR / PIN on that accessory entry
-5. On iPhone: **Home** app → Add Accessory → scan **that TV accessory** (not the main bridge)
-6. Assign a room
-
-Single-entity path: create a HomeKit Bridge, **before pairing** set mode to **accessory**, select only this `media_player`, then pair it in the Home app.
-
-If the player was previously exposed as switches, remove it from HomeKit and re-add, or call `homekit.reset_accessory`.
+After restart, a new **HomeKit accessory** entry appears (named after this TV). Open its pairing QR / PIN. On iPhone: **Home** → Add Accessory → scan **that accessory** (not the main bridge — same as Sony). If this `media_player` was previously exposed as switches, delete the old Home accessory and the old HomeKit entry, then restart so it can be recreated.
 
 **4. Enable Control Center Remote**
 
@@ -287,6 +251,7 @@ custom_components/ir_television/
   config_flow.py
   flow_schemas.py
   media_player.py
+  homekit_expose.py   # starts HomeKit accessory-mode pairing
   button.py
   diagnostics.py
   icons.json

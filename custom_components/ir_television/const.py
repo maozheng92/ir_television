@@ -108,6 +108,7 @@ INTENT_PREVIOUS = "previous_track"
 
 # MediaPlayerEntityFeature bit values (homeassistant.components.media_player)
 FEATURE_PAUSE = 1
+FEATURE_VOLUME_SET = 4
 FEATURE_VOLUME_MUTE = 8
 FEATURE_PREVIOUS_TRACK = 16
 FEATURE_NEXT_TRACK = 32
@@ -117,6 +118,32 @@ FEATURE_VOLUME_STEP = 1024
 FEATURE_SELECT_SOURCE = 2048
 FEATURE_STOP = 4096
 FEATURE_PLAY = 16384
+
+# Official braviatv always advertises this core set (minus PLAY_MEDIA /
+# BROWSE_MEDIA, which HomeKit Television does not use). HomeKit only builds a
+# Television + Speaker accessory — and iOS Control Center Remote only lists it —
+# when these bits are present at pairing time.
+HOMEKIT_TV_FEATURES = (
+    FEATURE_PAUSE
+    | FEATURE_VOLUME_SET
+    | FEATURE_VOLUME_MUTE
+    | FEATURE_PREVIOUS_TRACK
+    | FEATURE_NEXT_TRACK
+    | FEATURE_TURN_ON
+    | FEATURE_TURN_OFF
+    | FEATURE_VOLUME_STEP
+    | FEATURE_SELECT_SOURCE
+    | FEATURE_STOP
+    | FEATURE_PLAY
+)
+
+HOMEKIT_DOMAIN = "homekit"
+HOMEKIT_MODE_ACCESSORY = "accessory"
+HOMEKIT_DEFAULT_BRIDGE_PORT = 21063
+HOMEKIT_FILTER = "filter"
+HOMEKIT_INCLUDE_ENTITIES = "include_entities"
+HOMEKIT_PORT = "port"
+HOMEKIT_MODE = "mode"
 
 BUTTON_ICONS = {
     CMD_UP: "mdi:arrow-up",

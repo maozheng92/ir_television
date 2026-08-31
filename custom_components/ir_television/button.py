@@ -8,6 +8,7 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .command_sender import async_send_action
@@ -42,6 +43,9 @@ class IRTelevisionKeyButton(ButtonEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    # Keep d-pad keys off the HomeKit bridge so the TV accessory stays a
+    # single Television service (Apple rejects mixed TV accessories).
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry: ConfigEntry, key: str, action: dict[str, Any]) -> None:
         self._entry = entry

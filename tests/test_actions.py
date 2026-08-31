@@ -47,10 +47,13 @@ FEATURE_PAUSE = const.FEATURE_PAUSE
 FEATURE_PLAY = const.FEATURE_PLAY
 FEATURE_PREVIOUS_TRACK = const.FEATURE_PREVIOUS_TRACK
 FEATURE_SELECT_SOURCE = const.FEATURE_SELECT_SOURCE
+FEATURE_STOP = const.FEATURE_STOP
 FEATURE_TURN_OFF = const.FEATURE_TURN_OFF
 FEATURE_TURN_ON = const.FEATURE_TURN_ON
 FEATURE_VOLUME_MUTE = const.FEATURE_VOLUME_MUTE
+FEATURE_VOLUME_SET = const.FEATURE_VOLUME_SET
 FEATURE_VOLUME_STEP = const.FEATURE_VOLUME_STEP
+HOMEKIT_TV_FEATURES = const.HOMEKIT_TV_FEATURES
 INTENT_PAUSE = const.INTENT_PAUSE
 INTENT_PLAY = const.INTENT_PLAY
 INTENT_PLAY_PAUSE = const.INTENT_PLAY_PAUSE
@@ -64,9 +67,12 @@ build_button_service_data = actions.build_button_service_data
 build_remote_service_data = actions.build_remote_service_data
 build_source_list = actions.build_source_list
 compute_supported_features = actions.compute_supported_features
+collect_homekit_ports = actions.collect_homekit_ports
 copy_config = actions.copy_config
 find_source = actions.find_source
 has_useful_config = actions.has_useful_config
+homekit_accessory_entity_ids = actions.homekit_accessory_entity_ids
+next_homekit_port = actions.next_homekit_port
 normalize_power_sensor = actions.normalize_power_sensor
 parse_action_input = actions.parse_action_input
 parse_broadlink_codes_payload = actions.parse_broadlink_codes_payload
@@ -92,50 +98,49 @@ def _btn(entity_id: str = "button.tv_ok") -> dict:
 
 
 class FeatureFlagTests(unittest.TestCase):
-    def test_empty_still_advertises_select_source(self) -> None:
-        """HomeKit needs SELECT_SOURCE even with no user-configured sources."""
-        self.assertEqual(compute_supported_features({}, []), FEATURE_SELECT_SOURCE)
-
-    def test_power_toggle_enables_on_and_off(self) -> None:
-        commands = {"power_toggle": _ir("power")}
-        bits = compute_supported_features(commands, [])
+    def test_always_matches_sony_bravia_homekit_bits(self) -> None:
+        """Sparse features make iOS skip the TV; braviatv always advertises these."""
+        bits = compute_supported_features({}, [])
+        self.assertEqual(bits, HOMEKIT_TV_FEATURES)
         self.assertTrue(bits & FEATURE_TURN_ON)
         self.assertTrue(bits & FEATURE_TURN_OFF)
+        self.assertTrue(bits & FEATURE_VOLUME_STEP)
+        self.assertTrue(bits & FEATURE_VOLUME_MUTE)
+        self.assertTrue(bits & FEATURE_VOLUME_SET)
         self.assertTrue(bits & FEATURE_SELECT_SOURCE)
-        self.assertFalse(bits & FEATURE_VOLUME_STEP)
+        self.assertTrue(bits & FEATURE_PLAY)
+        self.assertTrue(bits & FEATURE_PAUSE)
+        self.assertTrue(bits & FEATURE_STOP)
+        self.assertTrue(bits & FEATURE_NEXT_TRACK)
+        self.assertTrue(bits & FEATURE_PREVIOUS_TRACK)
 
-    def test_on_off_separate(self) -> None:
+    def test_mapped_commands_do_not_change_bits(self) -> None:
+        commands = {"power_toggle": _ir("power"), "play": _ir("play")}
+        self.assertEqual(compute_supported_features(commands, []), HOMEKIT_TV_FEATURES)
+
+    def test_on_off_separate_still_full_mask(self) -> None:
         commands = {"turn_on": _ir("on"), "turn_off": _ir("off")}
-        bits = compute_supported_features(commands, [])
-        self.assertTrue(bits & FEATURE_TURN_ON)
-        self.assertTrue(bits & FEATURE_TURN_OFF)
+        self.assertEqual(compute_supported_features(commands, []), HOMEKIT_TV_FEATURES)
 
-    def test_volume_and_mute(self) -> None:
+    def test_volume_and_mute_still_full_mask(self) -> None:
         commands = {
             "volume_up": _ir("volup"),
             "volume_mute": _btn("button.mute"),
         }
-        bits = compute_supported_features(commands, [])
-        self.assertTrue(bits & FEATURE_VOLUME_STEP)
-        self.assertTrue(bits & FEATURE_VOLUME_MUTE)
+        self.assertEqual(compute_supported_features(commands, []), HOMEKIT_TV_FEATURES)
 
-    def test_play_pause_single_key(self) -> None:
-        bits = compute_supported_features({"play_pause": _ir("pp")}, [])
-        self.assertTrue(bits & FEATURE_PLAY)
-        self.assertTrue(bits & FEATURE_PAUSE)
+    def test_play_pause_single_key_still_full_mask(self) -> None:
+        self.assertEqual(
+            compute_supported_features({"play_pause": _ir("pp")}, []),
+            HOMEKIT_TV_FEATURES,
+        )
 
-    def test_play_only(self) -> None:
-        bits = compute_supported_features({"play": _ir("play")}, [])
-        self.assertTrue(bits & FEATURE_PLAY)
-        self.assertFalse(bits & FEATURE_PAUSE)
-
-    def test_channels_and_sources(self) -> None:
+    def test_channels_and_sources_still_full_mask(self) -> None:
         commands = {"next_track": _ir("ch+"), "previous_track": _ir("ch-")}
         sources = [{"name": "HDMI 1", "action": _ir("hdmi1")}]
-        bits = compute_supported_features(commands, sources)
-        self.assertTrue(bits & FEATURE_NEXT_TRACK)
-        self.assertTrue(bits & FEATURE_PREVIOUS_TRACK)
-        self.assertTrue(bits & FEATURE_SELECT_SOURCE)
+        self.assertEqual(
+            compute_supported_features(commands, sources), HOMEKIT_TV_FEATURES
+        )
 
     def test_source_list_ignores_blank(self) -> None:
         self.assertEqual(
@@ -425,6 +430,50 @@ class BroadlinkCodesTests(unittest.TestCase):
     def test_invalid(self) -> None:
         self.assertEqual(parse_broadlink_codes_payload(None), ([], []))
         self.assertEqual(parse_broadlink_codes_payload([]), ([], []))
+
+
+class HomeKitAccessoryHelperTests(unittest.TestCase):
+    def test_detects_accessory_entity(self) -> None:
+        entries = [
+            (
+                {
+                    "mode": "accessory",
+                    "port": 21064,
+                    "filter": {"include_entities": ["media_player.living_tv"]},
+                },
+                {},
+            ),
+            ({"mode": "bridge", "port": 21063}, {}),
+        ]
+        self.assertEqual(
+            homekit_accessory_entity_ids(entries), {"media_player.living_tv"}
+        )
+
+    def test_reads_mode_from_options(self) -> None:
+        entries = [
+            (
+                {"port": 21063},
+                {
+                    "mode": "accessory",
+                    "filter": {"include_entities": ["media_player.sony"]},
+                },
+            )
+        ]
+        self.assertEqual(
+            homekit_accessory_entity_ids(entries), {"media_player.sony"}
+        )
+
+    def test_next_port_skips_used(self) -> None:
+        self.assertEqual(next_homekit_port({21064, 21065}), 21066)
+        self.assertEqual(
+            collect_homekit_ports(
+                [
+                    ({"port": 21063}, {}),
+                    ({}, {"port": "21064"}),
+                ]
+            ),
+            {21063, 21064},
+        )
 
 
 if __name__ == "__main__":

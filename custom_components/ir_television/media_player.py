@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -83,6 +84,7 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         self._attr_unique_id = f"{entry.entry_id}_tv"
         self._is_on = False
         self._muted = False
+        self._volume = 0.5  # optimistic 0..1 like braviatv (HomeKit CHAR_VOLUME)
         self._source: str | None = None
         self._media: str | None = None  # playing | paused | None
 
@@ -135,6 +137,11 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
     @property
     def is_volume_muted(self) -> bool:
         return self._muted
+
+    @property
+    def volume_level(self) -> float | None:
+        """Absolute volume 0..1 so HomeKit adds TelevisionSpeaker CHAR_VOLUME."""
+        return self._volume
 
     @property
     def source(self) -> str | None:
@@ -210,6 +217,11 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             attrs = last.attributes or {}
             if "is_volume_muted" in attrs:
                 self._muted = bool(attrs.get("is_volume_muted"))
+            if attrs.get("volume_level") is not None:
+                try:
+                    self._volume = max(0.0, min(1.0, float(attrs["volume_level"])))
+                except (TypeError, ValueError):
+                    pass
             if attrs.get("source"):
                 self._source = str(attrs["source"])
 
@@ -233,28 +245,45 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
                 self._async_homekit_tv_remote_key,
             )
         )
+        self.hass.async_create_task(self._async_expose_homekit())
 
     async def _async_fire(self, intent: str) -> bool:
         commands = self._commands()
         key = resolve_command_key(commands, intent)
         if key is None:
-            _LOGGER.warning(
-                "IR Television '%s': %s is not mapped; ignoring",
+            _LOGGER.debug(
+                "IR Television '%s': %s is not mapped; HomeKit state still updates",
                 self._entry.title,
                 intent,
             )
             return False
         return await async_send_action(self.hass, commands.get(key), intent)
 
+    async def _async_expose_homekit(self) -> None:
+        """Pair this TV as a HomeKit accessory so Control Center Remote lists it."""
+        for _ in range(100):
+            if self.hass.states.get(self.entity_id) is not None:
+                break
+            await asyncio.sleep(0.05)
+        else:
+            _LOGGER.debug(
+                "IR Television '%s': no state yet; skip HomeKit accessory create",
+                self._entry.title,
+            )
+            return
+        from .homekit_expose import async_ensure_homekit_tv_accessory
+
+        await async_ensure_homekit_tv_accessory(self.hass, self.entity_id)
+
     async def async_turn_on(self) -> None:
-        if await self._async_fire(INTENT_TURN_ON):
-            self._apply_power(True)
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_TURN_ON)
+        self._apply_power(True)
+        self.async_write_ha_state()
 
     async def async_turn_off(self) -> None:
-        if await self._async_fire(INTENT_TURN_OFF):
-            self._apply_power(False)
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_TURN_OFF)
+        self._apply_power(False)
+        self.async_write_ha_state()
 
     async def async_toggle(self) -> None:
         commands = self._commands()
@@ -270,32 +299,46 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             await self.async_turn_on()
 
     async def async_volume_up(self) -> None:
-        if await self._async_fire(INTENT_VOLUME_UP):
-            self._mark_on_from_command()
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_VOLUME_UP)
+        self._volume = min(1.0, self._volume + 0.05)
+        self._mark_on_from_command()
+        self.async_write_ha_state()
 
     async def async_volume_down(self) -> None:
-        if await self._async_fire(INTENT_VOLUME_DOWN):
-            self._mark_on_from_command()
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_VOLUME_DOWN)
+        self._volume = max(0.0, self._volume - 0.05)
+        self._mark_on_from_command()
+        self.async_write_ha_state()
+
+    async def async_set_volume_level(self, volume: float) -> None:
+        """HomeKit CHAR_VOLUME (braviatv also implements this)."""
+        target = max(0.0, min(1.0, float(volume)))
+        old = self._volume
+        self._volume = target
+        if target > old + 0.001:
+            await self._async_fire(INTENT_VOLUME_UP)
+        elif target < old - 0.001:
+            await self._async_fire(INTENT_VOLUME_DOWN)
+        self._mark_on_from_command()
+        self.async_write_ha_state()
 
     async def async_mute_volume(self, mute: bool) -> None:
-        if await self._async_fire(INTENT_VOLUME_MUTE):
-            self._muted = mute
-            self._mark_on_from_command()
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_VOLUME_MUTE)
+        self._muted = mute
+        self._mark_on_from_command()
+        self.async_write_ha_state()
 
     async def async_media_play(self) -> None:
-        if await self._async_fire(INTENT_PLAY):
-            self._mark_on_from_command()
-            self._media = "playing"
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_PLAY)
+        self._mark_on_from_command()
+        self._media = "playing"
+        self.async_write_ha_state()
 
     async def async_media_pause(self) -> None:
-        if await self._async_fire(INTENT_PAUSE):
-            self._mark_on_from_command()
-            self._media = "paused"
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_PAUSE)
+        self._mark_on_from_command()
+        self._media = "paused"
+        self.async_write_ha_state()
 
     async def async_media_play_pause(self) -> None:
         commands = self._commands()
@@ -312,20 +355,20 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             await self.async_media_play()
 
     async def async_media_stop(self) -> None:
-        if await self._async_fire(INTENT_STOP):
-            self._mark_on_from_command()
-            self._media = "paused"
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_STOP)
+        self._mark_on_from_command()
+        self._media = "paused"
+        self.async_write_ha_state()
 
     async def async_media_next_track(self) -> None:
-        if await self._async_fire(INTENT_NEXT):
-            self._mark_on_from_command()
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_NEXT)
+        self._mark_on_from_command()
+        self.async_write_ha_state()
 
     async def async_media_previous_track(self) -> None:
-        if await self._async_fire(INTENT_PREVIOUS):
-            self._mark_on_from_command()
-            self.async_write_ha_state()
+        await self._async_fire(INTENT_PREVIOUS)
+        self._mark_on_from_command()
+        self.async_write_ha_state()
 
     async def _async_homekit_tv_remote_key(self, event: Event) -> None:
         """Map Apple Control Center Remote keys to configured IR/button commands."""

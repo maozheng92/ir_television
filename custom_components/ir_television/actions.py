@@ -46,16 +46,13 @@ from .const import (
     CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
     DEFAULT_SOURCE_NAME,
-    FEATURE_NEXT_TRACK,
-    FEATURE_PAUSE,
-    FEATURE_PLAY,
-    FEATURE_PREVIOUS_TRACK,
-    FEATURE_SELECT_SOURCE,
-    FEATURE_STOP,
-    FEATURE_TURN_OFF,
-    FEATURE_TURN_ON,
-    FEATURE_VOLUME_MUTE,
-    FEATURE_VOLUME_STEP,
+    HOMEKIT_DEFAULT_BRIDGE_PORT,
+    HOMEKIT_FILTER,
+    HOMEKIT_INCLUDE_ENTITIES,
+    HOMEKIT_MODE,
+    HOMEKIT_MODE_ACCESSORY,
+    HOMEKIT_PORT,
+    HOMEKIT_TV_FEATURES,
     INTENT_PAUSE,
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
@@ -83,32 +80,58 @@ def compute_supported_features(
     commands: dict[str, Any] | None,
     sources: list[Any] | None,
 ) -> int:
-    """Return a MediaPlayerEntityFeature bitmask for configured commands."""
-    commands = commands or {}
-    features = 0
+    """Return a MediaPlayerEntityFeature bitmask for HomeKit Television.
 
-    if _has_action(commands, CMD_TURN_ON) or _has_action(commands, CMD_POWER_TOGGLE):
-        features |= FEATURE_TURN_ON
-    if _has_action(commands, CMD_TURN_OFF) or _has_action(commands, CMD_POWER_TOGGLE):
-        features |= FEATURE_TURN_OFF
-    if _has_action(commands, CMD_VOLUME_UP) or _has_action(commands, CMD_VOLUME_DOWN):
-        features |= FEATURE_VOLUME_STEP
-    if _has_action(commands, CMD_VOLUME_MUTE):
-        features |= FEATURE_VOLUME_MUTE
-    if _has_action(commands, CMD_PLAY) or _has_action(commands, CMD_PLAY_PAUSE):
-        features |= FEATURE_PLAY
-    if _has_action(commands, CMD_PAUSE) or _has_action(commands, CMD_PLAY_PAUSE):
-        features |= FEATURE_PAUSE
-    if _has_action(commands, CMD_STOP):
-        features |= FEATURE_STOP
-    if _has_action(commands, INTENT_NEXT):
-        features |= FEATURE_NEXT_TRACK
-    if _has_action(commands, INTENT_PREVIOUS):
-        features |= FEATURE_PREVIOUS_TRACK
-    # Always advertise SELECT_SOURCE so HomeKit creates CHAR_ACTIVE_IDENTIFIER
-    # and Input Source services (required for the iOS Control Center Remote).
-    features |= FEATURE_SELECT_SOURCE
-    return features
+    Matches the official Sony Bravia integration: the bits are advertised even
+    when the user has not mapped every IR key. HomeKit snapshots features at
+    accessory pairing; a sparse bitmask makes iOS treat the entity as switches
+    (or skip it) instead of listing it in Control Center Remote.
+    """
+    del commands, sources
+    return int(HOMEKIT_TV_FEATURES)
+
+
+def homekit_accessory_entity_ids(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> set[str]:
+    """Return entity ids already exposed as HomeKit accessory-mode TVs.
+
+    Each item is ``(entry.data, entry.options)``. HomeKit stores mode/filter on
+    data for accessory-source entries, and on options after some UI edits.
+    """
+    entity_ids: set[str] = set()
+    for data, options in entries:
+        mode = options.get(HOMEKIT_MODE, data.get(HOMEKIT_MODE))
+        if mode != HOMEKIT_MODE_ACCESSORY:
+            continue
+        filt = options.get(HOMEKIT_FILTER) or data.get(HOMEKIT_FILTER) or {}
+        include = filt.get(HOMEKIT_INCLUDE_ENTITIES) or []
+        if include:
+            entity_ids.add(str(include[0]))
+    return entity_ids
+
+
+def collect_homekit_ports(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> set[int]:
+    """Ports already used by HomeKit config entries."""
+    ports: set[int] = set()
+    for data, options in entries:
+        for blob in (options, data):
+            port = blob.get(HOMEKIT_PORT)
+            if port is None:
+                continue
+            try:
+                ports.add(int(port))
+            except (TypeError, ValueError):
+                continue
+    return ports
+
+
+def next_homekit_port(
+    used_ports: set[int], start: int = HOMEKIT_DEFAULT_BRIDGE_PORT + 1
+) -> int:
+    """Pick the next free HomeKit TCP port (default bridge uses 21063)."""
+    port = start
+    while port in used_ports:
+        port += 1
+    return port
 
 
 def resolve_command_key(commands: dict[str, Any] | None, intent: str) -> str | None:
