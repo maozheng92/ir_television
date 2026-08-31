@@ -68,6 +68,7 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
     """TV controlled by IR or button entities, with optional binary_sensor power."""
 
     _attr_device_class = MediaPlayerDeviceClass.TV
+    _attr_icon = "mdi:television"
     _attr_has_entity_name = True
     _attr_name = None
     _attr_should_poll = False

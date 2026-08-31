@@ -1,6 +1,5 @@
 {
   "name": "红外电视 IR Television",
   "render_readme": true,
-  "content_in_root": true,
   "homeassistant": "2024.1.0"
 }

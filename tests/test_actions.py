@@ -8,7 +8,7 @@ import types
 import unittest
 from pathlib import Path
 
-_PKG_DIR = Path(__file__).resolve().parents[1]
+_PKG_DIR = Path(__file__).resolve().parents[1] / "custom_components" / "ir_television"
 _PKG_NAME = "ir_television_pure"
 
 
