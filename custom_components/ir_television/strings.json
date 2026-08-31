@@ -11,13 +11,13 @@
       },
       "defaults": {
         "title": "Default Broadlink remote",
-        "description": "Optional. If most keys live on one Broadlink remote, pick it here (and the device name you used when learning codes). Later steps can leave the remote empty and only ask for the command name.",
+        "description": "Optional. If most keys live on one Broadlink remote, pick it from the dropdown of available `remote.*` entities (and the device name you used when learning codes). Later steps can leave the remote empty and only ask for the command name.",
         "data": {
           "default_remote": "Default remote entity",
           "default_device": "Default Broadlink device name"
         },
         "data_description": {
-          "default_remote": "Any `remote.*` entity that supports send_command (official Broadlink is typical).",
+          "default_remote": "Select a `remote.*` entity from the dropdown. Official Broadlink is typical.",
           "default_device": "The device label stored in the Broadlink integration, for example `living_room_tv`. Leave empty if unused."
         }
       },
@@ -42,7 +42,7 @@
       },
       "command": {
         "title": "Map: {command}",
-        "description": "Configure **{command}** (`{command_key}`).\n\n• Broadlink: pick a `remote.*` entity (or rely on the default), enter the learned command name, and optionally the Broadlink device name.\n• Button: pick a `button.*` entity. Pressing it is what this key will do.",
+        "description": "Configure **{command}** (`{command_key}`).\n\n• Broadlink: choose a `remote.*` entity from the dropdown (or rely on the default), then pick/enter the Broadlink device name and learned command.\n• Button: choose a `button.*` entity from the dropdown.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "Broadlink / remote entity",
@@ -52,7 +52,7 @@
           "button_entity": "Button entity"
         },
         "data_description": {
-          "remote_entity": "Required for Broadlink unless you set a default remote.",
+          "remote_entity": "Required for Broadlink unless you set a default remote. Select from available remote entities.",
           "device": "Required by the official Broadlink integration in most setups.",
           "command": "The name you gave the code when you learned it (for example `power_on`).",
           "button_entity": "Required when the control method is Button."

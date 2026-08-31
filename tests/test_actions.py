@@ -68,6 +68,7 @@ find_source = actions.find_source
 has_useful_config = actions.has_useful_config
 normalize_power_sensor = actions.normalize_power_sensor
 parse_action_input = actions.parse_action_input
+parse_broadlink_codes_payload = actions.parse_broadlink_codes_payload
 power_is_on_from_sensor = actions.power_is_on_from_sensor
 resolve_command_key = actions.resolve_command_key
 validate_source_name = actions.validate_source_name
@@ -316,6 +317,30 @@ class PowerSensorTests(unittest.TestCase):
         copied = copy_config({"name": "TV", "commands": {}, "sources": []})
         self.assertIsNone(copied["power_sensor"])
         self.assertFalse(copied["power_sensor_invert"])
+
+
+class BroadlinkCodesTests(unittest.TestCase):
+    def test_storage_wrapper(self) -> None:
+        devices, commands = parse_broadlink_codes_payload(
+            {
+                "version": 1,
+                "data": {
+                    "living_tv": {"power_on": "JgBQ", "hdmi_1": "JgBR"},
+                    "soundbar": {"mute": "JgBS"},
+                },
+            }
+        )
+        self.assertEqual(devices, ["living_tv", "soundbar"])
+        self.assertEqual(commands, ["hdmi_1", "mute", "power_on"])
+
+    def test_inner_mapping(self) -> None:
+        devices, commands = parse_broadlink_codes_payload({"tv": {"ok": "xx"}})
+        self.assertEqual(devices, ["tv"])
+        self.assertEqual(commands, ["ok"])
+
+    def test_invalid(self) -> None:
+        self.assertEqual(parse_broadlink_codes_payload(None), ([], []))
+        self.assertEqual(parse_broadlink_codes_payload([]), ([], []))
 
 
 if __name__ == "__main__":

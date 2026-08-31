@@ -388,3 +388,29 @@ def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | Non
     if not cleaned.startswith("binary_sensor."):
         return None, "invalid_power_sensor"
     return cleaned, None
+
+
+def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
+    """Extract learned Broadlink device and command names from a codes file.
+
+    Accepts either the storage wrapper ``{"data": {...}}`` or the inner mapping
+    ``{device_name: {command_name: code}}``.
+    """
+    devices: set[str] = set()
+    commands: set[str] = set()
+    if not isinstance(payload, dict):
+        return [], []
+    inner = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(inner, dict):
+        return [], []
+    for device_name, cmds in inner.items():
+        name = str(device_name).strip() if device_name is not None else ""
+        if name:
+            devices.add(name)
+        if not isinstance(cmds, dict):
+            continue
+        for command in cmds:
+            cmd = str(command).strip() if command is not None else ""
+            if cmd:
+                commands.add(cmd)
+    return sorted(devices), sorted(commands)

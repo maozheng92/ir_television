@@ -106,17 +106,20 @@ class TelevisionFlowMixin:
 
     async def _proceed_after_queue(self) -> ConfigFlowResult:
         dest = self._after_queue
-        handler = {
+        handlers = {
             "volume_select": self.async_step_volume_select,
             "playback_select": self.async_step_playback_select,
             "channel_select": self.async_step_channel_select,
             "nav_select": self.async_step_nav_select,
             "source_ask": self.async_step_source_ask,
             "power_sensor": self.async_step_power_sensor,
-            "options_menu": self.async_step_init,
             "source_finish_add": self._finish_source_add,
             "source_finish_edit": self._finish_source_edit,
-        }.get(dest)
+        }
+        options_menu = getattr(self, "async_step_init", None)
+        if callable(options_menu):
+            handlers["options_menu"] = options_menu
+        handler = handlers.get(dest)
         if handler is None:
             return await self.async_step_source_ask()
         return await handler()
@@ -136,7 +139,7 @@ class TelevisionFlowMixin:
 
         return self.async_show_form(
             step_id="defaults",
-            data_schema=defaults_schema(self._data),
+            data_schema=defaults_schema(self.hass, self._data),
         )
 
     async def async_step_power_mode(
@@ -201,6 +204,7 @@ class TelevisionFlowMixin:
         return self.async_show_form(
             step_id="power_sensor",
             data_schema=power_sensor_schema(
+                self.hass,
                 current,
                 bool(self._data.get(CONF_POWER_SENSOR_INVERT)),
             ),
@@ -234,7 +238,9 @@ class TelevisionFlowMixin:
         existing = self._data[CONF_COMMANDS].get(key)
         return self.async_show_form(
             step_id="command",
-            data_schema=action_schema(defaults=self._data, existing=existing),
+            data_schema=action_schema(
+                self.hass, defaults=self._data, existing=existing
+            ),
             errors=errors,
             description_placeholders={
                 "command": self._cmd_label(key),
@@ -436,7 +442,9 @@ class TelevisionFlowMixin:
         name = self._source_draft.get(ATTR_NAME, "")
         return self.async_show_form(
             step_id="source_action",
-            data_schema=action_schema(defaults=self._data, existing=existing),
+            data_schema=action_schema(
+                self.hass, defaults=self._data, existing=existing
+            ),
             errors=errors,
             description_placeholders={"source_name": name},
         )
