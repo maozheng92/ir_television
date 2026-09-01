@@ -9,4 +9,4 @@
 - 监听 `homekit_tv_remote_key_pressed`，方向键可发红外
 - 可选 `binary_sensor` 作为电源状态回读
 
-安装：把 `custom_components/ir_television/` 复制到 Home Assistant 配置目录，**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。重启后查看新的 HomeKit 配对通知，用 iPhone **家庭** App 扫描**这个电视配件**的二维码（不要扫主桥）。
+安装：把 `custom_components/ir_television/` **整个文件夹**复制到 Home Assistant 配置目录（必须包含 `translations/en.json`，不能是空文件），**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。若向导报 `en.json` 空文档，删掉该目录后重新完整拷贝。重启后查看新的 HomeKit 配对通知，用 iPhone **家庭** App 扫描**这个电视配件**的二维码（不要扫主桥）。

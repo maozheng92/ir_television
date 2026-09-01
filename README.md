@@ -109,6 +109,21 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 4. 设置 → 系统 → 日志，查找 `ir_television`
 5. 浏览器强制刷新或无痕窗口
 
+### 向导报 `en.json` 空文件 / 无法加载配置向导
+
+日志若出现 `translations/en.json: Input is a zero-length, empty document`，说明 **HA 配置目录里这份文件是 0 字节**，不是仓库缺文件。Home Assistant 打开配置向导时会强制解析该 JSON，空文件会直接失败。
+
+请 **删掉整个** `/config/custom_components/ir_television/` 后再拷一次（不要只拷 `.py`、不要先建空文件再粘贴）：
+
+```text
+/config/custom_components/ir_television/manifest.json
+/config/custom_components/ir_television/strings.json
+/config/custom_components/ir_television/translations/en.json
+/config/custom_components/ir_television/translations/zh-Hans.json
+```
+
+在 HA **文件编辑器**里打开 `translations/en.json`，开头必须是 `{`，体积大约十几 KB，不能是空白。Samba / 从 Mac 拷目录时偶尔会留下 0 字节占位文件，遇到就删掉重拷。然后 **完整重启** Home Assistant，再添加集成。
+
 ### 添加集成（向导）
 
 1. **设置 → 设备与服务 → 添加集成**
