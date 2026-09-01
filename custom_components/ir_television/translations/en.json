@@ -360,7 +360,8 @@
       "back": { "name": "Back" },
       "home": { "name": "Home" },
       "menu": { "name": "Menu" },
-      "info": { "name": "Info" }
+      "info": { "name": "Info" },
+      "reset_homekit": { "name": "Reset HomeKit accessory" }
     },
     "remote": {
       "activity_remote": { "name": "Remote" }

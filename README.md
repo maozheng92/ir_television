@@ -86,6 +86,21 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 `media_player.tcl` 的属性已经够 TelevisionMediaPlayer（`device_class: tv`、`source_list`、`supported_features: 23997`）。若只配对了主桥或旧 TCL 电视配件，控制中心仍然不会列出红外这台。
 
+**已经是配件模式仍没有 iOS Remote Widget 时**
+
+HomeKit 官方文档写明：改 `device_class` / `supported_features` 之后，**已配对配件不会自动升级**，必须 `homekit.reset_accessory` 再当新配件加入。索尼第一次就是按完整电视配对的，所以不用这步。
+
+1. 点设备上的 **重置 HomeKit 配件** 按钮，或开发者工具 → 动作：
+
+```yaml
+action: homekit.reset_accessory
+data:
+  entity_id: media_player.tcl
+```
+
+2. iPhone **家庭** App 删除 TCL，再扫新二维码
+3. 控制中心 → 隔空播放遥控器 → **点顶部设备名**，从列表里选 TCL（默认常常还停在索尼上）
+
 **4. 打开控制中心遥控器**
 
 1. iPhone：**设置 → 控制中心**，确保已加入 **隔空播放遥控器** / **遥控器** / Apple TV Remote

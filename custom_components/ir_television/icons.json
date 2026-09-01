@@ -14,7 +14,8 @@
       "back": { "default": "mdi:arrow-u-left-top" },
       "home": { "default": "mdi:home" },
       "menu": { "default": "mdi:menu" },
-      "info": { "default": "mdi:information" }
+      "info": { "default": "mdi:information" },
+      "reset_homekit": { "default": "mdi:apple" }
     },
     "remote": {
       "activity_remote": { "default": "mdi:remote-tv" }

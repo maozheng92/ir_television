@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.button import ButtonEntity
@@ -22,19 +23,22 @@ from .const import (
     NAV_COMMANDS,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create a button entity for each configured navigation key."""
+    """Create a button entity for each configured navigation key plus HomeKit reset."""
     commands = entry.data.get(CONF_COMMANDS) or {}
-    entities = [
+    entities: list[ButtonEntity] = [
         IRTelevisionKeyButton(entry, key, commands[key])
         for key in NAV_COMMANDS
         if commands.get(key)
     ]
+    entities.append(IRTelevisionResetHomeKitButton(hass, entry))
     async_add_entities(entities)
 
 
@@ -66,3 +70,46 @@ class IRTelevisionKeyButton(ButtonEntity):
 
     async def async_press(self) -> None:
         await async_send_action(self.hass, self._action, f"key:{self._key}")
+
+
+class IRTelevisionResetHomeKitButton(ButtonEntity):
+    """Rebuild the HomeKit Television snapshot after feature/source changes."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "reset_homekit"
+    _attr_icon = "mdi:apple"
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self.hass = hass
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_reset_homekit"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._entry.data.get(CONF_NAME) or self._entry.title,
+            manufacturer=MANUFACTURER,
+            model=MODEL,
+        )
+
+    async def async_press(self) -> None:
+        runtime = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}
+        entity_ids = []
+        if isinstance(runtime, dict):
+            for key in ("tv_entity_id", "remote_entity_id"):
+                if runtime.get(key):
+                    entity_ids.append(runtime[key])
+        if not entity_ids:
+            return
+        try:
+            await self.hass.services.async_call(
+                "homekit",
+                "reset_accessory",
+                {"entity_id": entity_ids},
+                blocking=True,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("homekit.reset_accessory failed for %s", entity_ids)

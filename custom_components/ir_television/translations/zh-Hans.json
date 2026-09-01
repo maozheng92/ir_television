@@ -360,7 +360,8 @@
       "back": { "name": "返回" },
       "home": { "name": "主页" },
       "menu": { "name": "菜单" },
-      "info": { "name": "信息" }
+      "info": { "name": "信息" },
+      "reset_homekit": { "name": "重置 HomeKit 配件" }
     },
     "remote": {
       "activity_remote": { "name": "遥控器" }

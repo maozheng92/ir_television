@@ -40,6 +40,7 @@ async def async_ensure_homekit_tv_accessory(hass: HomeAssistant, entity_id: str)
     pairs = [(dict(entry.data), dict(entry.options)) for entry in entries]
     if entity_id in homekit_accessory_entity_ids(pairs):
         _LOGGER.debug("HomeKit accessory already exists for %s", entity_id)
+        await _async_notify_reset_for_widget(hass, entity_id)
         return
 
     port = next_homekit_port(collect_homekit_ports(pairs))
@@ -78,6 +79,32 @@ async def _async_notify_manual_pairing(hass: HomeAssistant, entity_id: str) -> N
                 "中扫描这个配件的二维码（不要扫主桥）。"
             ),
             "notification_id": f"{_NOTIFY_ID_PREFIX}{entity_id}",
+        },
+        blocking=False,
+    )
+
+
+async def _async_notify_reset_for_widget(hass: HomeAssistant, entity_id: str) -> None:
+    """Accessory pairing is not enough if HomeKit cached an old Television snapshot."""
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "title": "红外电视：配件已配对但仍无 iOS Remote",
+            "message": (
+                f"`{entity_id}` 已经是 HomeKit **配件**。实体属性（`device_class: tv`、"
+                "`source_list`、`supported_features: 23997`）足够生成 TelevisionMediaPlayer；"
+                "控制中心遥控器仍不出现，通常是 HomeKit **第一次配对时缓存了旧的开关/功能位**。"
+                "后来改成完整电视后，iOS 不会自动升级。\n\n"
+                "请按官方 HomeKit 文档做一次 **重置配件**（索尼第一次就是按电视配对的，所以不用这步）：\n"
+                "1. 开发者工具 → 动作 → `homekit.reset_accessory`，`entity_id` 填 "
+                f"`{entity_id}`（或点设备上的「重置 HomeKit 配件」按钮）\n"
+                "2. iPhone **家庭** App 删除 TCL\n"
+                "3. 再扫这条配件的新二维码\n"
+                "4. 控制中心 → 隔空播放遥控器 → **点顶部设备名**，从列表里选 TCL"
+                "（默认往往还停在索尼/Apple TV 上）"
+            ),
+            "notification_id": f"{_NOTIFY_ID_PREFIX}reset_{entity_id}",
         },
         blocking=False,
     )
