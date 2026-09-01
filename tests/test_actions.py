@@ -42,9 +42,11 @@ const, actions = _load_helpers()
 
 ACTION_BROADLINK = const.ACTION_BROADLINK
 ACTION_BUTTON = const.ACTION_BUTTON
+FEATURE_BROWSE_MEDIA = const.FEATURE_BROWSE_MEDIA
 FEATURE_NEXT_TRACK = const.FEATURE_NEXT_TRACK
 FEATURE_PAUSE = const.FEATURE_PAUSE
 FEATURE_PLAY = const.FEATURE_PLAY
+FEATURE_PLAY_MEDIA = const.FEATURE_PLAY_MEDIA
 FEATURE_PREVIOUS_TRACK = const.FEATURE_PREVIOUS_TRACK
 FEATURE_SELECT_SOURCE = const.FEATURE_SELECT_SOURCE
 FEATURE_STOP = const.FEATURE_STOP
@@ -100,9 +102,10 @@ def _btn(entity_id: str = "button.tv_ok") -> dict:
 
 class FeatureFlagTests(unittest.TestCase):
     def test_always_matches_sony_bravia_homekit_bits(self) -> None:
-        """Sparse features make iOS skip the TV; braviatv always advertises these."""
+        """Sparse features make iOS skip the TV; braviatv always advertises 155581."""
         bits = compute_supported_features({}, [])
         self.assertEqual(bits, HOMEKIT_TV_FEATURES)
+        self.assertEqual(bits, 155581)
         self.assertTrue(bits & FEATURE_TURN_ON)
         self.assertTrue(bits & FEATURE_TURN_OFF)
         self.assertTrue(bits & FEATURE_VOLUME_STEP)
@@ -114,6 +117,8 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertTrue(bits & FEATURE_STOP)
         self.assertTrue(bits & FEATURE_NEXT_TRACK)
         self.assertTrue(bits & FEATURE_PREVIOUS_TRACK)
+        self.assertTrue(bits & FEATURE_PLAY_MEDIA)
+        self.assertTrue(bits & FEATURE_BROWSE_MEDIA)
 
     def test_mapped_commands_do_not_change_bits(self) -> None:
         commands = {"power_toggle": _ir("power"), "play": _ir("play")}
@@ -257,6 +262,11 @@ class HomeKitRemoteKeyTests(unittest.TestCase):
         self.assertIsNone(resolve_homekit_remote_key(commands, None))
         self.assertIsNone(resolve_homekit_remote_key({}, "arrow_up"))
         self.assertIsNone(resolve_homekit_remote_key({"up": {}}, "arrow_up"))
+
+    def test_stored_command_key_is_accepted(self) -> None:
+        commands = {"up": _ir("up"), "ok": _ir("ok")}
+        self.assertEqual(resolve_homekit_remote_key(commands, "up"), "up")
+        self.assertEqual(resolve_homekit_remote_key(commands, "OK"), "ok")
 
 
 class SourceValidationTests(unittest.TestCase):

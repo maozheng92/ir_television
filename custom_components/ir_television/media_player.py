@@ -1,16 +1,23 @@
-"""Television media_player — device_class TV for Apple HomeKit / Control Center Remote."""
+"""Television media_player — same HomeKit surface as official braviatv.
+
+HomeKit builds TelevisionMediaPlayer from this entity only (device_class=tv).
+The companion ``remote`` platform is a HA helper, not a second HomeKit accessory.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
 from homeassistant.components.media_player import (
+    BrowseError,
+    BrowseMedia,
+    MediaClass,
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaType,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
@@ -21,7 +28,6 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .actions import (
     build_source_list,
-    compute_supported_features,
     current_source_name,
     find_source,
     normalize_source_name,
@@ -39,6 +45,7 @@ from .const import (
     CONF_SOURCES,
     DOMAIN,
     EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED,
+    HOMEKIT_TV_FEATURES,
     INTENT_PAUSE,
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
@@ -78,6 +85,8 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
     _attr_name = None
     _attr_should_poll = False
     _attr_available = True
+    _attr_assumed_state = True
+    _attr_supported_features = MediaPlayerEntityFeature(HOMEKIT_TV_FEATURES)
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -87,7 +96,6 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         self._muted = False
         self._volume = 0.5  # optimistic 0..1 like braviatv (HomeKit CHAR_VOLUME)
         self._source: str | None = None
-        self._media: str | None = None  # playing | paused | None
 
     def _commands(self) -> dict[str, Any]:
         return dict(self._entry.data.get(CONF_COMMANDS) or {})
@@ -107,11 +115,6 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         return bool(self._entry.data.get(CONF_POWER_SENSOR_INVERT))
 
     @property
-    def assumed_state(self) -> bool:
-        """Power is assumed unless a binary_sensor is providing feedback."""
-        return self._power_sensor is None
-
-    @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.entry_id)},
@@ -121,19 +124,11 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         )
 
     @property
-    def supported_features(self) -> MediaPlayerEntityFeature:
-        bits = compute_supported_features(self._commands(), self._sources())
-        return MediaPlayerEntityFeature(bits)
-
-    @property
     def state(self) -> MediaPlayerState:
-        if not self._is_on:
-            return MediaPlayerState.OFF
-        if self._media == "playing":
-            return MediaPlayerState.PLAYING
-        if self._media == "paused":
-            return MediaPlayerState.PAUSED
-        return MediaPlayerState.ON
+        """ON or OFF only — same as official BraviaTVMediaPlayer."""
+        if self._is_on:
+            return MediaPlayerState.ON
+        return MediaPlayerState.OFF
 
     @property
     def is_volume_muted(self) -> bool:
@@ -155,6 +150,11 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         return build_source_list(self._sources())
 
     @property
+    def media_title(self) -> str | None:
+        """Title of current playing media (active input)."""
+        return self.source
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         sensor = self._power_sensor
         if not sensor:
@@ -166,8 +166,6 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
 
     def _apply_power(self, is_on: bool) -> None:
         self._is_on = is_on
-        if not is_on:
-            self._media = None
 
     def _mark_on_from_command(self) -> None:
         """Optimistic on only when there is no power sensor to contradict us."""
@@ -209,13 +207,8 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             state = last.state
             if state in _OFF_STATES:
                 self._is_on = False
-                self._media = None
             else:
                 self._is_on = True
-                if state == "playing":
-                    self._media = "playing"
-                elif state == "paused":
-                    self._media = "paused"
             attrs = last.attributes or {}
             if "is_volume_muted" in attrs:
                 self._muted = bool(attrs.get("is_volume_muted"))
@@ -253,7 +246,6 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
                 self._async_homekit_tv_remote_key,
             )
         )
-        self.hass.async_create_task(self._async_expose_homekit())
 
     async def _async_fire(self, intent: str) -> bool:
         commands = self._commands()
@@ -266,22 +258,6 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             )
             return False
         return await async_send_action(self.hass, commands.get(key), intent)
-
-    async def _async_expose_homekit(self) -> None:
-        """Pair this TV as a HomeKit accessory so Control Center Remote lists it."""
-        for _ in range(100):
-            if self.hass.states.get(self.entity_id) is not None:
-                break
-            await asyncio.sleep(0.05)
-        else:
-            _LOGGER.debug(
-                "IR Television '%s': no state yet; skip HomeKit accessory create",
-                self._entry.title,
-            )
-            return
-        from .homekit_expose import async_ensure_homekit_tv_accessory
-
-        await async_ensure_homekit_tv_accessory(self.hass, self.entity_id)
 
     async def async_turn_on(self) -> None:
         await self._async_fire(INTENT_TURN_ON)
@@ -339,25 +315,24 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
     async def async_media_play(self) -> None:
         await self._async_fire(INTENT_PLAY)
         self._mark_on_from_command()
-        self._media = "playing"
         self.async_write_ha_state()
 
     async def async_media_pause(self) -> None:
         await self._async_fire(INTENT_PAUSE)
         self._mark_on_from_command()
-        self._media = "paused"
         self.async_write_ha_state()
 
     async def async_media_play_pause(self) -> None:
         commands = self._commands()
         dedicated = resolve_command_key(commands, INTENT_PLAY_PAUSE)
         if dedicated:
-            if await async_send_action(self.hass, commands.get(dedicated), INTENT_PLAY_PAUSE):
+            if await async_send_action(
+                self.hass, commands.get(dedicated), INTENT_PLAY_PAUSE
+            ):
                 self._mark_on_from_command()
-                self._media = "paused" if self._media == "playing" else "playing"
                 self.async_write_ha_state()
             return
-        if self._media == "playing":
+        if self._is_on:
             await self.async_media_pause()
         else:
             await self.async_media_play()
@@ -365,7 +340,6 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
     async def async_media_stop(self) -> None:
         await self._async_fire(INTENT_STOP)
         self._mark_on_from_command()
-        self._media = "paused"
         self.async_write_ha_state()
 
     async def async_media_next_track(self) -> None:
@@ -377,6 +351,64 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         await self._async_fire(INTENT_PREVIOUS)
         self._mark_on_from_command()
         self.async_write_ha_state()
+
+    async def async_browse_media(
+        self,
+        media_content_type: MediaType | str | None = None,
+        media_content_id: str | None = None,
+    ) -> BrowseMedia:
+        """Browse configured input sources (Sony-style media browser)."""
+        if not media_content_id:
+            return await self._async_browse_media_root()
+        path = media_content_id.partition("/")
+        if path[0] == "sources":
+            return await self._async_browse_media_sources(True)
+        raise BrowseError(f"Media not found: {media_content_type} / {media_content_id}")
+
+    async def _async_browse_media_root(self) -> BrowseMedia:
+        title = self._entry.data.get(CONF_NAME) or self._entry.title or "TV"
+        return BrowseMedia(
+            title=str(title),
+            media_class=MediaClass.DIRECTORY,
+            media_content_id="",
+            media_content_type="",
+            can_play=False,
+            can_expand=True,
+            children=[await self._async_browse_media_sources()],
+        )
+
+    async def _async_browse_media_sources(self, expanded: bool = False) -> BrowseMedia:
+        if expanded:
+            children = [
+                BrowseMedia(
+                    title=name,
+                    media_class=MediaClass.CHANNEL,
+                    media_content_id=name,
+                    media_content_type=MediaType.CHANNEL,
+                    can_play=True,
+                    can_expand=False,
+                )
+                for name in self.source_list
+            ]
+        else:
+            children = None
+        return BrowseMedia(
+            title="Sources",
+            media_class=MediaClass.DIRECTORY,
+            media_content_id="sources",
+            media_content_type=MediaType.CHANNELS,
+            children_media_class=MediaClass.CHANNEL,
+            can_play=False,
+            can_expand=True,
+            children=children,
+        )
+
+    async def async_play_media(
+        self, media_type: MediaType | str, media_id: str, **kwargs: Any
+    ) -> None:
+        """Play media — treat the id as an input source name."""
+        del media_type, kwargs
+        await self.async_select_source(media_id)
 
     async def _async_homekit_tv_remote_key(self, event: Event) -> None:
         """Map Apple Control Center Remote keys to configured IR/button commands."""

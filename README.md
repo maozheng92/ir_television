@@ -16,9 +16,9 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 
 - 平台：`media_player`，设备类别 `tv`（Apple HomeKit 会把它识别为 `TelevisionMediaPlayer`）
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
-- 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上完整的 Sony Bravia 式功能位（开/关、音量、播放、输入源），HomeKit 才能建成 Television + Speaker
-- 添加后会为 **media_player（TelevisionMediaPlayer）** 和 **remote（ActivityRemote，`type_remotes.py`）** 各建一条 HomeKit **配件模式** 条目。iOS 控制中心遥控器认的是带 Television 服务的配件；活动遥控器的 `activity_list` 就是 HDMI 源
-- 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到电视或遥控器实体
+- 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上与官方 Sony Bravia 相同的功能位（`supported_features: 155581`，含 `PLAY_MEDIA` / `BROWSE_MEDIA`）
+- **`remote` 与电视是同一设备上的第二个实体**（`_attr_name = None`，无 ACTIVITY），只给 HA 自动化发红外用。**不会**单独创建 HomeKit 配件——和官方 braviatv 一样，iOS 遥控器只认 `media_player`
+- 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到 `media_player`
 
 ### 为什么索尼可以显示、红外电视以前不行
 
@@ -26,15 +26,16 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 
 官方 **Sony Bravia TV** 集成会：
 
-1. **始终**声明一整套电视功能位（`TURN_ON/OFF`、`VOLUME_STEP/MUTE/SET`、`PLAY/PAUSE`、`SELECT_SOURCE` 等），HomeKit 据此创建 Television 配件。
-2. 在第一次配置 HomeKit 并勾选 `media_player` 域时，自动得到一条 **配件模式** 条目，再在「家庭」里单独配对。
+1. **始终**声明一整套电视功能位（含 `PLAY_MEDIA` / `BROWSE_MEDIA`），状态只有 **ON / OFF**。
+2. 电视和遥控器在 HA 里是**同一设备上的两个实体**；HomeKit **只暴露 `media_player`**。不会为 `remote` 再建一条配件。
+3. 你现有的 HomeKit 集成（桥接会自动把 `device_class=tv` 的播放器拆成配件，或你手动把该 `media_player` 加进配件模式）负责出现在「家庭」里。
 
-红外电视如果是后来才加的，HomeKit **不会**再为它建配件（主桥还会把电视排除掉），所以控制中心没有遥控器。本版本会自己发起与索尼相同的配件配对流程，并把功能位对齐索尼。
+本集成对齐上述模型：**不再自动创建 HomeKit 配置条目**。请像加索尼那样，把 **`media_player.tcl`（或你的电视实体）** 交给 HomeKit，并删掉以前多出来的「TCL 遥控器」配件。
 
 Apple 显示遥控器仍需要：
 
-1. 实体是 `device_class=tv` 的完整 Television（本集成现在始终如此）。
-2. 在「家庭」App 里**单独配对**这条电视配件（不要只配对主桥）。
+1. 实体是 `device_class=tv` 的完整 Television（本集成现在始终如此，功能位 `155581`）。
+2. 这条 **`media_player`** 已在「家庭」App 里配对（走你现有的 HomeKit 桥 / 配件，和索尼同一条路径）。
 3. iPhone：**设置 → 控制中心** 打开 **隔空播放遥控器 / 遥控器**。
 
 HomeKit 方向键映射（未映射则忽略）：
@@ -74,23 +75,19 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 设置 → 设备与服务 → 添加集成 → 搜索 **红外电视** / **IR Television**。至少映射电源；方向键请映射上/下/左/右/确定/返回，控制中心遥控器的 D-pad 才会发红外。输入源可选（不填也会有默认 **TV**）。
 
-**3. 配对 HomeKit 电视配件（和索尼一样，必须单独扫码）**
+**3. 把 `media_player` 交给 HomeKit（和索尼同一条路径，不要给 remote 建配件）**
 
-更新到 **1.5.0** 并完整重启后，设备上会多一个 **遥控器 (Remote)** 实体（`remote.*`，`supported_features` 含 Activity）。HomeKit 会按 `type_remotes.py` 的 **ActivityRemote** 再出一条独立配件（名称类似 **TCL 遥控器**）。
+更新到 **1.6.0** 后：
 
-请扫 **这条遥控器配件** 的二维码（不要扫主桥，也不要和家里原生 TCL HomeKit 电视搞混）：
+- `remote` **不再**带 ACTIVITY，也**不会**再自动创建 HomeKit 配件
+- `media_player` 功能位变为与索尼相同的 **155581**（含浏览/播放媒体）
+- 设备上的「重置 HomeKit 配件」只重置 **`media_player`**
 
-1. 设置 → 设备与服务 → 找到刚出现的 HomeKit 配件（实体是 `remote.xxx`，不是主桥）
-2. 打开配对二维码，用一台 iPhone **家庭** App 添加
-3. 控制中心 → 隔空播放遥控器 里应出现这台电视；输入源是 HDMI1–4 那些 activity
+请立刻清掉以前多出来的配件：
 
-`media_player.tcl` 的属性已经够 TelevisionMediaPlayer（`device_class: tv`、`source_list`、`supported_features: 23997`）。若只配对了主桥或旧 TCL 电视配件，控制中心仍然不会列出红外这台。
-
-**已经是配件模式仍没有 iOS Remote Widget 时**
-
-HomeKit 官方文档写明：改 `device_class` / `supported_features` 之后，**已配对配件不会自动升级**，必须 `homekit.reset_accessory` 再当新配件加入。索尼第一次就是按完整电视配对的，所以不用这步。
-
-1. 点设备上的 **重置 HomeKit 配件** 按钮，或开发者工具 → 动作：
+1. HA **设置 → 设备与服务**：删除实体为 `remote.*` / 名称像 **TCL 遥控器** 的 HomeKit **配件**条目（若有）
+2. 确认 HomeKit 里包含的是 **`media_player.tcl`**（和索尼一样只包含电视播放器）。若用桥接：让 `media_player` 域被包含，电视会自动拆成配件；若用配件模式：只勾选这个 `media_player`
+3. 点设备上的 **重置 HomeKit 配件**，或：
 
 ```yaml
 action: homekit.reset_accessory
@@ -98,8 +95,14 @@ data:
   entity_id: media_player.tcl
 ```
 
-2. iPhone **家庭** App 删除 TCL，再扫新二维码
-3. 控制中心 → 隔空播放遥控器 → **点顶部设备名**，从列表里选 TCL（默认常常还停在索尼上）
+4. iPhone **家庭** App 删除旧的 TCL / 「TCL 遥控器」，再扫 **media_player 那条** HomeKit 配件的新二维码（不要扫主桥，也不要和家里原生 TCL HomeKit 电视搞混）
+5. 控制中心 → 隔空播放遥控器 → **点顶部设备名**，从列表里选 TCL（默认常常还停在索尼上）
+
+`media_player.tcl` 对齐索尼：`device_class: tv`、`source_list`、`state` 只有 on/off、`supported_features: 155581`、`assumed_state: true`。
+
+**已经配对过但仍没有 iOS Remote Widget 时**
+
+HomeKit 官方文档写明：改 `device_class` / `supported_features` 之后，**已配对配件不会自动升级**，必须 `homekit.reset_accessory` 再当新配件加入。索尼第一次就是按完整电视配对的，所以不用这步。功能位从 `23997` 升到 `155581` 之后，一定要重置再扫码。
 
 **4. 打开控制中心遥控器**
 
@@ -122,7 +125,7 @@ data:
 按这个清干净再配一次（和第一次加索尼配件一样）：
 
 1. iPhone **家庭** App：删除所有叫 TCL / 红外电视 的配件（每台 iPhone、iPad 都看一眼）
-2. HA **设置 → 设备与服务**：只保留**一条**模式为 **配件 (accessory)**、实体为这台 `media_player.*` 的 HomeKit；多出来的删掉
+2. HA **设置 → 设备与服务**：只保留**一条**包含这台 **`media_player.*`** 的 HomeKit（桥接拆出的电视配件，或配件模式且只勾了播放器）。删掉 `remote.*` 的多余配件
 3. 打开这条 HomeKit 的 **配对二维码**，用**一台** iPhone 添加配件（不要扫主桥）
 4. 其它设备等「家庭」iCloud 同步，不要各自再扫码
 5. 若提示无法添加：删掉该 HomeKit 配件条目 → 重启 HA → 用新二维码再配
@@ -211,26 +214,23 @@ Broadlink 实体暂时不可用时，本集成**不会崩溃**，只会在日志
 
 A HACS-ready custom component (`custom_components/ir_television`) that creates one TV device with:
 
-- A `media_player` (`MediaPlayerDeviceClass.TV`) with the same core feature bits as official **Sony Bravia** (`TURN_ON/OFF`, volume step/mute/set, play/pause, `SELECT_SOURCE`)
+- A `media_player` (`MediaPlayerDeviceClass.TV`) with the same feature bits as official **Sony Bravia** (`supported_features: 155581`, including `PLAY_MEDIA` / `BROWSE_MEDIA`). State is **ON or OFF** only
+- A `remote` on the **same device** (`_attr_name = None`, no ACTIVITY) for `remote.send_command`. HomeKit does **not** get a second accessory — same as braviatv
 - A default **TV** input source when you configured none
-- Automatic **HomeKit accessory-mode** pairing (Sony appears in Control Center because it already has that standalone accessory; a TV added later used to be skipped)
 - A listener for `homekit_tv_remote_key_pressed` so Control Center D-pad keys fire IR
 - Optional `binary_sensor` for real power feedback
 - Optional diagnostic `button` entities for d-pad / back / home / menu / info (hidden from HomeKit)
 - Config Flow + Options Flow (`en` and `zh-Hans`)
 
-It does **not** talk to the TV over HDMI-CEC or a network API. It fires commands you already have in Home Assistant.
+It does **not** talk to the TV over HDMI-CEC or a network API. It fires commands you already have in Home Assistant. It does **not** auto-create HomeKit config entries; include the `media_player` in your existing HomeKit setup the same way as Sony.
 
 ### Why Sony shows in the iOS Remote and this TV did not
 
 This is the **Apple Control Center → Apple TV Remote / Remote**, not the Home Assistant Companion home-screen widget.
 
-Official **Sony Bravia TV** always advertises a full Television feature set, and HomeKit created an **accessory-mode** entry when the bridge was first set up with the `media_player` domain. TVs added later are excluded from the bridge and never get a pairing QR — so Control Center never lists them. This integration now starts that same accessory flow and matches Sony's feature bits.
+Official **Sony Bravia TV** advertises a full Television feature set on **one** `media_player`. The HA `remote` entity is unnamed, has no ACTIVITY flag, and is **not** a HomeKit accessory. HomeKit (bridge auto-split or accessory include) exposes only that media player.
 
-You still need to:
-
-1. Pair **that TV accessory** in the Apple Home app (not the main HA bridge).
-2. Enable Control Center → Apple TV Remote / Remote.
+Include **`media_player.*`** in HomeKit. Delete any extra accessory that was created for `remote.*` / “TCL 遥控器”. After upgrading, `homekit.reset_accessory` on the media player (feature bits changed to 155581), delete the old Home accessory, re-scan, then tap the **title** in Control Center Remote to switch from Sony to this TV.
 
 ### Make the Remote appear
 
@@ -244,9 +244,17 @@ Copy the folder `custom_components/ir_television` to `<config>/custom_components
 
 **Settings → Devices & Services → Add Integration → IR Television**. Map power at minimum. Map up/down/left/right/ok/back if you want the Control Center D-pad to send IR. Custom sources are optional.
 
-**3. Pair the HomeKit TV accessory**
+**3. Pair the HomeKit *media_player* (not the remote)**
 
-After restart, a new **HomeKit accessory** entry appears (named after this TV). Open its pairing QR / PIN. On iPhone: **Home** → Add Accessory → scan **that accessory** (not the main bridge — same as Sony). If this `media_player` was previously exposed as switches, delete the old Home accessory and the old HomeKit entry, then restart so it can be recreated.
+Sony does not create a separate HomeKit accessory for its remote. Include `media_player.tcl` in HomeKit the same way. Delete leftover accessory-mode entries for `remote.*`. Then:
+
+```yaml
+action: homekit.reset_accessory
+data:
+  entity_id: media_player.tcl
+```
+
+Delete TCL in the Home app, scan the **media_player** accessory QR, and in Control Center Remote tap the **top device name** to pick this TV (it often stays on Sony).
 
 **4. Enable Control Center Remote**
 
@@ -306,8 +314,7 @@ custom_components/ir_television/
   config_flow.py
   flow_schemas.py
   media_player.py
-  remote.py           # ActivityRemote (HomeKit type_remotes.py)
-  homekit_expose.py   # starts HomeKit accessory-mode pairing
+  remote.py           # same device, no ACTIVITY, not a HomeKit accessory
   button.py
   diagnostics.py
   icons.json

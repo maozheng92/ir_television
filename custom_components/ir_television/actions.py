@@ -261,6 +261,9 @@ def resolve_homekit_remote_key(
     mapped = HOMEKIT_REMOTE_KEY_COMMANDS.get(key)
     if mapped and _has_action(commands, mapped):
         return mapped
+    # remote.send_command("up") / stored IR key names, not only HomeKit names
+    if _has_action(commands, key):
+        return key
     return None
 
 

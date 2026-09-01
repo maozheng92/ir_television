@@ -114,15 +114,15 @@ FEATURE_PREVIOUS_TRACK = 16
 FEATURE_NEXT_TRACK = 32
 FEATURE_TURN_ON = 128
 FEATURE_TURN_OFF = 256
+FEATURE_PLAY_MEDIA = 512
 FEATURE_VOLUME_STEP = 1024
 FEATURE_SELECT_SOURCE = 2048
 FEATURE_STOP = 4096
 FEATURE_PLAY = 16384
+FEATURE_BROWSE_MEDIA = 131072
 
-# Official braviatv always advertises this core set (minus PLAY_MEDIA /
-# BROWSE_MEDIA, which HomeKit Television does not use). HomeKit only builds a
-# Television + Speaker accessory — and iOS Control Center Remote only lists it —
-# when these bits are present at pairing time.
+# Official braviatv media_player._attr_supported_features (bitmask 155581).
+# HomeKit snapshots this at pairing; a sparse mask makes iOS skip the TV.
 HOMEKIT_TV_FEATURES = (
     FEATURE_PAUSE
     | FEATURE_VOLUME_SET
@@ -131,10 +131,12 @@ HOMEKIT_TV_FEATURES = (
     | FEATURE_NEXT_TRACK
     | FEATURE_TURN_ON
     | FEATURE_TURN_OFF
+    | FEATURE_PLAY_MEDIA
     | FEATURE_VOLUME_STEP
     | FEATURE_SELECT_SOURCE
     | FEATURE_STOP
     | FEATURE_PLAY
+    | FEATURE_BROWSE_MEDIA
 )
 
 HOMEKIT_DOMAIN = "homekit"

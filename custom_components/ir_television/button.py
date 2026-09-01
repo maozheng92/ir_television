@@ -97,19 +97,17 @@ class IRTelevisionResetHomeKitButton(ButtonEntity):
 
     async def async_press(self) -> None:
         runtime = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}
-        entity_ids = []
+        entity_id = None
         if isinstance(runtime, dict):
-            for key in ("tv_entity_id", "remote_entity_id"):
-                if runtime.get(key):
-                    entity_ids.append(runtime[key])
-        if not entity_ids:
+            entity_id = runtime.get("tv_entity_id")
+        if not entity_id:
             return
         try:
             await self.hass.services.async_call(
                 "homekit",
                 "reset_accessory",
-                {"entity_id": entity_ids},
+                {"entity_id": entity_id},
                 blocking=True,
             )
         except Exception:  # noqa: BLE001
-            _LOGGER.exception("homekit.reset_accessory failed for %s", entity_ids)
+            _LOGGER.exception("homekit.reset_accessory failed for %s", entity_id)
