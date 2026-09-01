@@ -93,6 +93,26 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 同一局域网；电视配件必须已在「家庭」中配对。主桥里有这台电视、配件模式未配对时，遥控器**不会**出现。
 
+### 日志出现 `attempted pair verify without being paired first`
+
+这是 **HomeKit 配对记录和 iPhone 对不上**，不是红外码错误。配件名 **TCL** 表示 HA 正在用 pyhap 广播这条电视配件。
+
+含义：若干苹果设备（日志里的 `192.168.1.x`）带着同一个控制器 UUID 来做「已配对验证」，但 HA 这份配件的已配对列表里**没有**这个 UUID。常见原因：
+
+- 重建过 HomeKit 配件 / 重启后换了新条目，家庭 App 里还留着旧 TCL
+- 家里已有一台原生 HomeKit 的 TCL 电视，和 HA 里这台红外电视**同名**，iOS 连错了
+- 一台 iPhone 扫过码，其它设备靠 iCloud 同步失败，却仍在尝试连接
+
+按这个清干净再配一次（和第一次加索尼配件一样）：
+
+1. iPhone **家庭** App：删除所有叫 TCL / 红外电视 的配件（每台 iPhone、iPad 都看一眼）
+2. HA **设置 → 设备与服务**：只保留**一条**模式为 **配件 (accessory)**、实体为这台 `media_player.*` 的 HomeKit；多出来的删掉
+3. 打开这条 HomeKit 的 **配对二维码**，用**一台** iPhone 添加配件（不要扫主桥）
+4. 其它设备等「家庭」iCloud 同步，不要各自再扫码
+5. 若提示无法添加：删掉该 HomeKit 配件条目 → 重启 HA → 用新二维码再配
+
+配对成功后这条 `pair verify` 日志应停止。若还在刷，就是某台苹果设备仍握着旧配对，在那台设备的家庭 App 里把 TCL 删掉。
+
 ### 前提条件
 
 - Home Assistant 2024.1 或更新
@@ -219,6 +239,10 @@ After restart, a new **HomeKit accessory** entry appears (named after this TV). 
 3. The paired TV should be listed. Power and volume use `media_player` services; D-pad uses `homekit_tv_remote_key_pressed`.
 
 The iPhone must be on the same LAN. The TV accessory must be paired in Home. If it only exists inside the main bridge, the Remote will **not** appear.
+
+### Log: `attempted pair verify without being paired first`
+
+This is a **stale HomeKit pairing**, not a bad IR mapping. An Apple device is trying to verify a pairing UUID that this HA accessory does not have. Remove TCL from the Home app on every iPhone/iPad, keep a single HomeKit **accessory** entry for this `media_player`, and pair with one iPhone's QR code. Other devices must join via iCloud Home sharing, not a second scan.
 
 ### Prerequisites
 
