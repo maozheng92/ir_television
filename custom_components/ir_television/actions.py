@@ -309,6 +309,23 @@ def build_source_list(sources: list[Any] | None) -> list[str]:
     return _configured_source_names(sources) or [DEFAULT_SOURCE_NAME]
 
 
+def current_source_name(source: str | None, sources: list[Any] | None) -> str | None:
+    """Return a source that always exists in ``source_list``.
+
+    HomeKit CHAR_ACTIVE_IDENTIFIER must match an Input Source. If the stored
+    current source is missing, fall back to the first advertised name.
+    """
+    names = build_source_list(sources)
+    if not names:
+        return None
+    target = normalize_source_name(source).lower()
+    if target:
+        for name in names:
+            if name.lower() == target:
+                return name
+    return names[0]
+
+
 def find_source(sources: list[SourceDict] | None, name: str) -> SourceDict | None:
     """Find a source by display name (case-insensitive)."""
     target = normalize_source_name(name).lower()

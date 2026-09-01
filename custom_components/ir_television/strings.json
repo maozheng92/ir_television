@@ -361,6 +361,9 @@
       "home": { "name": "Home" },
       "menu": { "name": "Menu" },
       "info": { "name": "Info" }
+    },
+    "remote": {
+      "activity_remote": { "name": "Remote" }
     }
   }
 }

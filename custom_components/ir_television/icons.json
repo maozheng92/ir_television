@@ -15,6 +15,9 @@
       "home": { "default": "mdi:home" },
       "menu": { "default": "mdi:menu" },
       "info": { "default": "mdi:information" }
+    },
+    "remote": {
+      "activity_remote": { "default": "mdi:remote-tv" }
     }
   }
 }

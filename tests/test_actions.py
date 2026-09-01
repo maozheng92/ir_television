@@ -67,6 +67,7 @@ build_button_service_data = actions.build_button_service_data
 build_remote_service_data = actions.build_remote_service_data
 build_source_list = actions.build_source_list
 compute_supported_features = actions.compute_supported_features
+current_source_name = actions.current_source_name
 collect_homekit_ports = actions.collect_homekit_ports
 copy_config = actions.copy_config
 find_source = actions.find_source
@@ -152,6 +153,13 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertEqual(build_source_list([]), [DEFAULT_SOURCE_NAME])
         self.assertEqual(build_source_list(None), [DEFAULT_SOURCE_NAME])
         self.assertEqual(build_source_list([{"name": "  "}]), [DEFAULT_SOURCE_NAME])
+
+    def test_current_source_always_in_list(self) -> None:
+        sources = [{"name": "HDMI1"}, {"name": "HDMI2"}]
+        self.assertEqual(current_source_name("HDMI2", sources), "HDMI2")
+        self.assertEqual(current_source_name("hdmi1", sources), "HDMI1")
+        self.assertEqual(current_source_name(None, sources), "HDMI1")
+        self.assertEqual(current_source_name("missing", sources), "HDMI1")
 
 
 class ResolveCommandTests(unittest.TestCase):

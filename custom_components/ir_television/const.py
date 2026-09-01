@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "ir_television"
-PLATFORMS = ["media_player", "button"]
+PLATFORMS = ["media_player", "remote", "button"]
 
 # Shown when the user configured no HDMI / app sources. HomeKit needs at least
 # one Input Source (CHAR_ACTIVE_IDENTIFIER) for the Control Center Remote.

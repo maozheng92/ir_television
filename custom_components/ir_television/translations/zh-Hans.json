@@ -361,6 +361,9 @@
       "home": { "name": "主页" },
       "menu": { "name": "菜单" },
       "info": { "name": "信息" }
+    },
+    "remote": {
+      "activity_remote": { "name": "遥控器" }
     }
   }
 }

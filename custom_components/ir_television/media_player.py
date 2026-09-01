@@ -22,6 +22,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .actions import (
     build_source_list,
     compute_supported_features,
+    current_source_name,
     find_source,
     normalize_source_name,
     power_is_on_from_sensor,
@@ -145,7 +146,8 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
 
     @property
     def source(self) -> str | None:
-        return self._source
+        """Always a member of source_list (HomeKit CHAR_ACTIVE_IDENTIFIER)."""
+        return current_source_name(self._source, self._sources())
 
     @property
     def source_list(self) -> list[str]:
@@ -229,6 +231,12 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             names = build_source_list(self._sources())
             if names:
                 self._source = names[0]
+
+        runtime = self.hass.data.setdefault(DOMAIN, {}).setdefault(
+            self._entry.entry_id, {}
+        )
+        if isinstance(runtime, dict):
+            runtime["tv_entity_id"] = self.entity_id
 
         sensor = self._power_sensor
         if sensor:
@@ -373,7 +381,12 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
     async def _async_homekit_tv_remote_key(self, event: Event) -> None:
         """Map Apple Control Center Remote keys to configured IR/button commands."""
         data = event.data or {}
-        if data.get("entity_id") != self.entity_id:
+        entity_id = data.get("entity_id")
+        runtime = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}
+        allowed = {self.entity_id}
+        if isinstance(runtime, dict) and runtime.get("remote_entity_id"):
+            allowed.add(runtime["remote_entity_id"])
+        if entity_id not in allowed:
             return
         key_name = data.get("key_name")
         commands = self._commands()

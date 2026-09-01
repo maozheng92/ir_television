@@ -17,8 +17,8 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 - 平台：`media_player`，设备类别 `tv`（Apple HomeKit 会把它识别为 `TelevisionMediaPlayer`）
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
 - 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上完整的 Sony Bravia 式功能位（开/关、音量、播放、输入源），HomeKit 才能建成 Television + Speaker
-- 添加或重启后会**自动创建 HomeKit 配件模式条目**（索尼能出遥控器，是因为它在配置 HomeKit 时已经有这条独立配件；后加的红外电视以前会被主桥跳过）
-- 方向键、返回、主页、菜单、信息：配置后会出现诊断类 `button`（不进 HomeKit）；**同时**监听 `homekit_tv_remote_key_pressed`
+- 添加后会为 **media_player（TelevisionMediaPlayer）** 和 **remote（ActivityRemote，`type_remotes.py`）** 各建一条 HomeKit **配件模式** 条目。iOS 控制中心遥控器认的是带 Television 服务的配件；活动遥控器的 `activity_list` 就是 HDMI 源
+- 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到电视或遥控器实体
 
 ### 为什么索尼可以显示、红外电视以前不行
 
@@ -76,14 +76,15 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 **3. 配对 HomeKit 电视配件（和索尼一样，必须单独扫码）**
 
-更新本集成并**完整重启**后，会自动出现一条新的 **HomeKit 配件**（设置 → 设备与服务里多一个 HomeKit 条目，名称是这台电视）。
+更新到 **1.5.0** 并完整重启后，设备上会多一个 **遥控器 (Remote)** 实体（`remote.*`，`supported_features` 含 Activity）。HomeKit 会按 `type_remotes.py` 的 **ActivityRemote** 再出一条独立配件（名称类似 **TCL 遥控器**）。
 
-1. 打开该 HomeKit 条目上的 **配对二维码 / PIN**
-2. iPhone **家庭** App → 添加配件 → 扫描**这个电视配件**（**不要**扫「Home Assistant Bridge」主桥，索尼也是单独那条）
-3. 放进房间并完成设置
-4. 若以前把这台 `media_player` 当开关加进过主桥：在家庭 App 里删掉旧设备，并在 HA 里删掉旧 HomeKit 配件后重启，让本集成重建
+请扫 **这条遥控器配件** 的二维码（不要扫主桥，也不要和家里原生 TCL HomeKit 电视搞混）：
 
-自动创建失败时，前端会有持久通知。手动做法：添加 **HomeKit 桥接** → 配对前改成 **配件 (accessory)** → 只选这台 `media_player.*`。
+1. 设置 → 设备与服务 → 找到刚出现的 HomeKit 配件（实体是 `remote.xxx`，不是主桥）
+2. 打开配对二维码，用一台 iPhone **家庭** App 添加
+3. 控制中心 → 隔空播放遥控器 里应出现这台电视；输入源是 HDMI1–4 那些 activity
+
+`media_player.tcl` 的属性已经够 TelevisionMediaPlayer（`device_class: tv`、`source_list`、`supported_features: 23997`）。若只配对了主桥或旧 TCL 电视配件，控制中心仍然不会列出红外这台。
 
 **4. 打开控制中心遥控器**
 
@@ -290,6 +291,7 @@ custom_components/ir_television/
   config_flow.py
   flow_schemas.py
   media_player.py
+  remote.py           # ActivityRemote (HomeKit type_remotes.py)
   homekit_expose.py   # starts HomeKit accessory-mode pairing
   button.py
   diagnostics.py
