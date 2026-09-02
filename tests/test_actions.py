@@ -536,6 +536,41 @@ class HomeKitIidDecodeTests(unittest.TestCase):
             ["entry_remote"],
         )
 
+    def test_unpaired_television_mdns_is_not_listed(self) -> None:
+        decoded = actions.decode_hap_mdns_txt(
+            {
+                "c#": "2",
+                "ci": "31",
+                "ff": "0",
+                "id": "8E:CB:0F:6D:29:D3",
+                "md": "TCL",
+                "pv": "1.1",
+                "s#": "1",
+                "sf": "1",
+            }
+        )
+        self.assertTrue(decoded["is_television"])
+        self.assertTrue(decoded["not_paired"])
+        self.assertFalse(decoded["ios_remote_listed"])
+
+    def test_paired_television_mdns_is_ready_for_remote(self) -> None:
+        decoded = actions.decode_hap_mdns_txt(
+            {
+                "c#": "2",
+                "ci": "31",
+                "ff": "0",
+                "id": "8E:CB:0F:6D:29:D3",
+                "md": "TCL",
+                "pv": "1.1",
+                "s#": "1",
+                "sf": "0",
+            }
+        )
+        self.assertTrue(decoded["is_television"])
+        self.assertTrue(decoded["paired"])
+        self.assertTrue(decoded["ios_remote_listed"])
+        self.assertEqual(decoded["accessory_id"], "8E:CB:0F:6D:29:D3")
+
 
 class HomeKitAccessoryHelperTests(unittest.TestCase):
     def test_detects_accessory_entity(self) -> None:

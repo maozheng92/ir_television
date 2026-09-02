@@ -155,6 +155,41 @@ def decode_homekit_iid_allocations(
     }
 
 
+HAP_CATEGORY_TELEVISION = 31
+
+
+def decode_hap_mdns_txt(txt: dict[str, Any] | None) -> dict[str, Any]:
+    """Interpret HAP ``_hap._tcp`` TXT records (Discovery / Bonjour).
+
+    ``ci=31`` is Television. ``sf`` bit 0 set (``sf=1``) means *not paired* —
+    Control Center Remote never lists unpaired TVs even when category is correct.
+    """
+
+    def _as_int(key: str) -> int | None:
+        raw = (txt or {}).get(key)
+        if raw is None or raw == "":
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    sf = _as_int("sf") or 0
+    ci = _as_int("ci")
+    not_paired = bool(sf & 1)
+    return {
+        "category": ci,
+        "is_television": ci == HAP_CATEGORY_TELEVISION,
+        "not_paired": not_paired,
+        "paired": not not_paired,
+        "protocol": str((txt or {}).get("pv") or ""),
+        "config_number": _as_int("c#"),
+        "accessory_id": str((txt or {}).get("id") or ""),
+        "model": str((txt or {}).get("md") or ""),
+        "ios_remote_listed": ci == HAP_CATEGORY_TELEVISION and not not_paired,
+    }
+
+
 def describe_homekit_entries(
     entries: list[tuple[dict[str, Any], dict[str, Any]]],
 ) -> list[dict[str, Any]]:
