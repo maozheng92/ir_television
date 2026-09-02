@@ -361,7 +361,7 @@
       "home": { "name": "主页" },
       "menu": { "name": "菜单" },
       "info": { "name": "信息" },
-      "reset_homekit": { "name": "重置 HomeKit 配件" }
+      "recreate_homekit": { "name": "重建 HomeKit 电视配件" }
     }
   }
 }

@@ -38,7 +38,7 @@ async def async_setup_entry(
         for key in NAV_COMMANDS
         if commands.get(key)
     ]
-    entities.append(IRTelevisionResetHomeKitButton(hass, entry))
+    entities.append(IRTelevisionRecreateHomeKitButton(hass, entry))
     async_add_entities(entities)
 
 
@@ -72,19 +72,19 @@ class IRTelevisionKeyButton(ButtonEntity):
         await async_send_action(self.hass, self._action, f"key:{self._key}")
 
 
-class IRTelevisionResetHomeKitButton(ButtonEntity):
-    """Rebuild the HomeKit Television snapshot after feature/source changes."""
+class IRTelevisionRecreateHomeKitButton(ButtonEntity):
+    """Delete and recreate the HomeKit TV accessory (new pairing identity)."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_translation_key = "reset_homekit"
+    _attr_translation_key = "recreate_homekit"
     _attr_icon = "mdi:apple"
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_reset_homekit"
+        self._attr_unique_id = f"{entry.entry_id}_recreate_homekit"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -97,17 +97,13 @@ class IRTelevisionResetHomeKitButton(ButtonEntity):
 
     async def async_press(self) -> None:
         runtime = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id) or {}
-        entity_id = None
+        entity_ids: list[str] = []
         if isinstance(runtime, dict):
-            entity_id = runtime.get("tv_entity_id")
-        if not entity_id:
+            for key in ("tv_entity_id", "remote_entity_id"):
+                if runtime.get(key):
+                    entity_ids.append(str(runtime[key]))
+        if not entity_ids:
             return
-        try:
-            await self.hass.services.async_call(
-                "homekit",
-                "reset_accessory",
-                {"entity_id": entity_id},
-                blocking=True,
-            )
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("homekit.reset_accessory failed for %s", entity_id)
+        from .homekit_expose import async_recreate_homekit_tv_accessory
+
+        await async_recreate_homekit_tv_accessory(self.hass, entity_ids)

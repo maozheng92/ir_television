@@ -15,7 +15,7 @@
       "home": { "default": "mdi:home" },
       "menu": { "default": "mdi:menu" },
       "info": { "default": "mdi:information" },
-      "reset_homekit": { "default": "mdi:apple" }
+      "recreate_homekit": { "default": "mdi:apple" }
     }
   }
 }

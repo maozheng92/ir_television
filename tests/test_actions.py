@@ -450,6 +450,93 @@ class BroadlinkCodesTests(unittest.TestCase):
         self.assertEqual(parse_broadlink_codes_payload([]), ([], []))
 
 
+class HomeKitIidDecodeTests(unittest.TestCase):
+    def test_splits_iid_keys(self) -> None:
+        self.assertEqual(actions.split_homekit_iid_key("D8___"), ("D8", "", ""))
+        self.assertEqual(actions.split_homekit_iid_key("D8__E8_"), ("D8", "", "E8"))
+        self.assertEqual(
+            actions.split_homekit_iid_key("D9_HDMI1__"), ("D9", "HDMI1", "")
+        )
+        self.assertEqual(
+            actions.split_homekit_iid_key("D9_HDMI1_E3_"), ("D9", "HDMI1", "E3")
+        )
+        self.assertEqual(actions.split_homekit_iid_key("113__11A_"), ("113", "", "11A"))
+
+    def test_user_tcl_dump_is_accessory_mode_television(self) -> None:
+        """The dump from HA storage is already a complete TelevisionMediaPlayer."""
+        allocations = {
+            "1": {
+                "3E__14_": 2,
+                "3E__20_": 3,
+                "3E__21_": 4,
+                "3E__23_": 5,
+                "3E__30_": 6,
+                "3E__52_": 7,
+                "A2___": 8,
+                "A2__37_": 9,
+                "D8___": 10,
+                "D8__B0_": 11,
+                "D8__E7_": 12,
+                "D8__E3_": 13,
+                "D8__E8_": 14,
+                "D8__E1_": 15,
+                "D9_HDMI1__": 16,
+                "D9_HDMI2__": 23,
+                "D9_HDMI3__": 30,
+                "D9_HDMI4__": 37,
+                "113___": 44,
+                "113__11A_": 45,
+                "113__E9_": 48,
+                "113__EA_": 49,
+                "113__119_": 50,
+            }
+        }
+        decoded = actions.decode_homekit_iid_allocations(allocations)
+        self.assertTrue(decoded["looks_like_accessory_mode_tv"])
+        acc = decoded["accessories"][0]
+        self.assertTrue(acc["has_television"])
+        self.assertTrue(acc["has_remote_key"])
+        self.assertTrue(acc["has_sleep_discovery"])
+        self.assertTrue(acc["has_speaker"])
+        self.assertTrue(acc["ios_remote_ready"])
+        self.assertEqual(acc["input_sources"], ["HDMI1", "HDMI2", "HDMI3", "HDMI4"])
+
+    def test_bridge_aid1_without_television_is_not_ready(self) -> None:
+        allocations = {
+            "1": {"3E__14_": 2, "A2___": 3},
+            "2": {"D8___": 10, "D8__E8_": 14, "D9_HDMI1__": 16},
+        }
+        decoded = actions.decode_homekit_iid_allocations(allocations)
+        self.assertFalse(decoded["looks_like_accessory_mode_tv"])
+        self.assertTrue(decoded["accessories"][1]["ios_remote_ready"])
+
+    def test_homekit_entries_for_entity(self) -> None:
+        entries = [
+            (
+                {
+                    "mode": "accessory",
+                    "filter": {"include_entities": ["media_player.tcl"]},
+                },
+                {},
+                "entry_tv",
+            ),
+            (
+                {"mode": "accessory", "filter": {"include_entities": ["remote.tcl"]}},
+                {},
+                "entry_remote",
+            ),
+            ({"mode": "bridge", "port": 21063}, {}, "entry_bridge"),
+        ]
+        self.assertEqual(
+            actions.homekit_entries_for_entity(entries, "media_player.tcl"),
+            ["entry_tv"],
+        )
+        self.assertEqual(
+            actions.homekit_entries_for_entity(entries, "remote.tcl"),
+            ["entry_remote"],
+        )
+
+
 class HomeKitAccessoryHelperTests(unittest.TestCase):
     def test_detects_accessory_entity(self) -> None:
         entries = [

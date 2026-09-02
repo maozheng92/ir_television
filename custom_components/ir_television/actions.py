@@ -91,6 +91,111 @@ def compute_supported_features(
     return int(HOMEKIT_TV_FEATURES)
 
 
+def split_homekit_iid_key(key: str) -> tuple[str, str, str]:
+    """Split an HA HomeKit iid key ``{service}_{unique}_{char}_``."""
+    body = key[:-1] if key.endswith("_") else key
+    parts = body.split("_")
+    service = parts[0] if parts else ""
+    if len(parts) < 2:
+        return service, "", ""
+    char = parts[-1]
+    unique = "_".join(parts[1:-1])
+    return service, unique, char
+
+
+def decode_homekit_iid_allocations(
+    allocations: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Summarize a ``homekit.*.iids`` allocations blob.
+
+    A working iOS Control Center Remote accessory is a *single* HAP accessory
+    (aid 1 in accessory mode) with Television (D8) + RemoteKey (E8) + at least
+    one Input Source (D9). TelevisionSpeaker (113) is optional but present for
+    volume. A Bridge would typically have aid 1 *without* D8 (bridge info only)
+    and the TV on aid 2+.
+    """
+    accessories: list[dict[str, Any]] = []
+    for aid, mapping in (allocations or {}).items():
+        if not isinstance(mapping, dict):
+            continue
+        sources: list[str] = []
+        chars_by_service: dict[str, set[str]] = {}
+        for key in mapping:
+            service, unique, char = split_homekit_iid_key(str(key))
+            bucket = f"{service}:{unique}" if unique else service
+            chars_by_service.setdefault(bucket, set())
+            if char:
+                chars_by_service[bucket].add(char)
+            if service == "D9" and unique and unique not in sources:
+                sources.append(unique)
+        has_television = any(name == "D8" or name.startswith("D8:") for name in chars_by_service)
+        tv_chars = chars_by_service.get("D8", set())
+        accessories.append(
+            {
+                "aid": str(aid),
+                "has_accessory_information": "3E" in chars_by_service,
+                "has_protocol_information": "A2" in chars_by_service,
+                "has_television": has_television,
+                "has_remote_key": "E8" in tv_chars,
+                "has_sleep_discovery": "E1" in tv_chars,
+                "has_speaker": any(
+                    name == "113" or name.startswith("113:") for name in chars_by_service
+                ),
+                "input_sources": sources,
+                "ios_remote_ready": bool(
+                    has_television and "E8" in tv_chars and sources
+                ),
+            }
+        )
+    tv_on_aid1 = bool(accessories and accessories[0].get("ios_remote_ready"))
+    return {
+        "accessory_count": len(accessories),
+        "looks_like_accessory_mode_tv": tv_on_aid1 and len(accessories) == 1,
+        "accessories": accessories,
+    }
+
+
+def describe_homekit_entries(
+    entries: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Summarize HomeKit config entries (data, options) for diagnostics."""
+    described: list[dict[str, Any]] = []
+    for data, options in entries:
+        blob = {**data, **options}
+        filt = blob.get(HOMEKIT_FILTER) or {}
+        if not isinstance(filt, dict):
+            filt = {}
+        described.append(
+            {
+                "mode": blob.get(HOMEKIT_MODE),
+                "name": blob.get("name"),
+                "port": blob.get(HOMEKIT_PORT),
+                "include_entities": list(filt.get(HOMEKIT_INCLUDE_ENTITIES) or []),
+            }
+        )
+    return described
+
+
+def homekit_entries_for_entity(
+    entries: list[tuple[dict[str, Any], dict[str, Any], str]],
+    entity_id: str,
+) -> list[str]:
+    """Return config entry ids whose include filter contains ``entity_id``.
+
+    Each item is ``(data, options, entry_id)``.
+    """
+    matches: list[str] = []
+    for data, options, entry_id in entries:
+        blob = {**data, **options}
+        filt = blob.get(HOMEKIT_FILTER) or {}
+        if not isinstance(filt, dict):
+            continue
+        include = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
+        if entity_id in include:
+            matches.append(entry_id)
+    return matches
+
+
 def homekit_accessory_entity_ids(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> set[str]:
     """Return entity ids already exposed as HomeKit accessory-mode TVs.
 

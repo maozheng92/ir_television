@@ -361,7 +361,7 @@
       "home": { "name": "Home" },
       "menu": { "name": "Menu" },
       "info": { "name": "Info" },
-      "reset_homekit": { "name": "Reset HomeKit accessory" }
+      "recreate_homekit": { "name": "Rebuild HomeKit TV accessory" }
     }
   }
 }

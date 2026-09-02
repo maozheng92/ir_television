@@ -102,7 +102,22 @@ data:
 
 **已经配对过但仍没有 iOS Remote Widget 时**
 
-HomeKit 官方文档写明：改 `device_class` / `supported_features` 之后，**已配对配件不会自动升级**，必须 `homekit.reset_accessory` 再当新配件加入。索尼第一次就是按完整电视配对的，所以不用这步。功能位从 `23997` 升到 `155581` 之后，一定要重置再扫码。
+先看 `.storage` 里 `homekit.*.iids`。若 aid `1` 上已有：
+
+- `D8` Television（含 `E8` RemoteKey、`E1` SleepDiscoveryMode）
+- `D9_HDMI1` … `D9_HDMI4` 四个输入源
+- `113` Television Speaker（音量/静音）
+
+那 **HomeKit 配件已经是完整电视**，再改 `supported_features` 也救不了控制中心。`homekit.reset_accessory` **不会更换配对 MAC**，iPhone 上残留的 `pair verify` UUID 仍然对不上。
+
+请更新到 **1.6.1** 后点设备上的 **重建 HomeKit 电视配件**（会删掉旧 HomeKit 条目并新建二维码），然后：
+
+1. 家庭 App **每台苹果设备**都删掉 TCL / TCL 遥控器
+2. 只扫 **新的** 配件二维码（不要扫主桥）
+3. 家里若已有 **原厂 TCL HomeKit/AirPlay**：把本集成改名为 **TCL红外** 再点一次重建，避免同名抢发现
+4. 控制中心遥控器 **点顶部设备名** 选这台（默认常停在索尼上）
+
+索尼能出现在「隔空播放遥控器」里，经常是电视自己的 **AirPlay 2**，不是 HA `braviatv` 实体。红外电视没有 AirPlay，只能靠这条 HA HomeKit 电视配件。
 
 **4. 打开控制中心遥控器**
 
@@ -315,6 +330,7 @@ custom_components/ir_television/
   flow_schemas.py
   media_player.py
   remote.py           # same device, no ACTIVITY, not a HomeKit accessory
+  homekit_expose.py   # rebuild HomeKit accessory with a new pairing identity
   button.py
   diagnostics.py
   icons.json

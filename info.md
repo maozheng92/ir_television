@@ -11,4 +11,4 @@
 
 安装：把 `custom_components/ir_television/` **整个文件夹**复制到 Home Assistant 配置目录（必须包含 `translations/en.json`，不能是空文件），**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。若向导报 `en.json` 空文档，删掉该目录后重新完整拷贝。
 
-把 **`media_player`** 交给现有 HomeKit（和索尼一样），删掉以前为 `remote` 多建的配件。升级后对 `media_player` 执行 `homekit.reset_accessory`，在家庭 App 里删掉旧 TCL 再扫码。控制中心遥控器请 **点顶部设备名** 从索尼切到这台电视。
+把 **`media_player`** 交给现有 HomeKit（配件模式、只含播放器）。若 iids 已是完整 Television 而控制中心仍没有遥控器，点设备上的 **重建 HomeKit 电视配件**（删除旧配对身份并出新二维码），不要只用 `homekit.reset_accessory`。家里原厂 TCL / 索尼 AirPlay 不要和 HA 配件同名。
