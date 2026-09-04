@@ -155,14 +155,28 @@ def decode_homekit_iid_allocations(
     }
 
 
+# HAP mDNS TXT ``ci`` (pyhap / HAP-NodeJS / Apple HomeKitADK).
+# 24 is Apple TV, not a generic television. 31 is Television.
+HAP_CATEGORY_APPLE_TV = 24
 HAP_CATEGORY_TELEVISION = 31
+HAP_CATEGORY_AUDIO_RECEIVER = 34
+HAP_CATEGORY_TV_SET_TOP_BOX = 35
+HAP_CATEGORY_TV_STREAMING_STICK = 36
+
+HAP_CATEGORY_NAMES = {
+    HAP_CATEGORY_APPLE_TV: "apple_tv",
+    HAP_CATEGORY_TELEVISION: "television",
+    HAP_CATEGORY_AUDIO_RECEIVER: "audio_receiver",
+    HAP_CATEGORY_TV_SET_TOP_BOX: "tv_set_top_box",
+    HAP_CATEGORY_TV_STREAMING_STICK: "tv_streaming_stick",
+}
 
 
 def decode_hap_mdns_txt(txt: dict[str, Any] | None) -> dict[str, Any]:
     """Interpret HAP ``_hap._tcp`` TXT records (Discovery / Bonjour).
 
-    ``ci=31`` is Television. ``sf`` bit 0 set (``sf=1``) means *not paired* —
-    Control Center Remote never lists unpaired TVs even when category is correct.
+    ``ci=31`` is Television. ``ci=24`` is Apple TV. ``sf`` bit 0 set
+    (``sf=1``) means *not paired*.
     """
 
     def _as_int(key: str) -> int | None:
@@ -179,7 +193,9 @@ def decode_hap_mdns_txt(txt: dict[str, Any] | None) -> dict[str, Any]:
     not_paired = bool(sf & 1)
     return {
         "category": ci,
+        "category_name": HAP_CATEGORY_NAMES.get(ci) if ci is not None else None,
         "is_television": ci == HAP_CATEGORY_TELEVISION,
+        "is_apple_tv": ci == HAP_CATEGORY_APPLE_TV,
         "not_paired": not_paired,
         "paired": not not_paired,
         "protocol": str((txt or {}).get("pv") or ""),

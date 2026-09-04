@@ -567,9 +567,19 @@ class HomeKitIidDecodeTests(unittest.TestCase):
             }
         )
         self.assertTrue(decoded["is_television"])
+        self.assertEqual(decoded["category_name"], "television")
+        self.assertFalse(decoded["is_apple_tv"])
         self.assertTrue(decoded["paired"])
         self.assertTrue(decoded["ios_remote_listed"])
         self.assertEqual(decoded["accessory_id"], "8E:CB:0F:6D:29:D3")
+
+    def test_ci_24_is_apple_tv_not_television(self) -> None:
+        decoded = actions.decode_hap_mdns_txt({"ci": "24", "sf": "0"})
+        self.assertEqual(decoded["category"], 24)
+        self.assertEqual(decoded["category_name"], "apple_tv")
+        self.assertTrue(decoded["is_apple_tv"])
+        self.assertFalse(decoded["is_television"])
+        self.assertFalse(decoded["ios_remote_listed"])
 
 
 class HomeKitAccessoryHelperTests(unittest.TestCase):

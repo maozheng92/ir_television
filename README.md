@@ -134,7 +134,8 @@ sf = 0
 
 | 字段 | 含义 |
 | --- | --- |
-| `ci = 31` | 配件类别是 **Television**。实体 / HomeKit 侧已经做对了。 |
+| `ci` | HAP 配件类别（只影响图标/分组，不改变 Television 服务本身）：**24 = Apple TV**，**31 = Television**（官方 HomeKit / pyhap / HAP-NodeJS）。HA 的 `TelevisionMediaPlayer` 广播的就是 **31**，这是对的。不要改成 24。 |
+| `ci = 31` | 这条配件是 **Television**。实体 / HomeKit 侧已经做对了。 |
 | `sf = 1` | **未配对**。控制中心遥控器不会列出。 |
 | `sf = 0` | **已配对**。HAP 广播已经允许 iOS 把它当作电视遥控器。若控制中心仍没有，是 iOS 选错设备或和原厂 TCL/索尼 AirPlay 同名，不是缺 Television 服务。 |
 | `md = TCL` | 广播名称。家里已有原厂 TCL 时，控制中心列表里可能有两个 TCL，默认停在原厂/索尼上。 |
