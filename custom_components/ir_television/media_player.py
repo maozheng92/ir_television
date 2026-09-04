@@ -94,8 +94,9 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         self._attr_unique_id = f"{entry.entry_id}_tv"
         self._is_on = False
         self._muted = False
-        self._volume = 0.5  # optimistic 0..1 like braviatv (HomeKit CHAR_VOLUME)
+        self._volume = 0.5
         self._source: str | None = None
+        self._sync_media_attrs()
 
     def _commands(self) -> dict[str, Any]:
         return dict(self._entry.data.get(CONF_COMMANDS) or {})
@@ -123,36 +124,34 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             model=MODEL,
         )
 
+    def _sync_media_attrs(self) -> None:
+        """Keep source / volume on the state dict for HomeKit CHAR_ACTIVE_IDENTIFIER.
+
+        HA omits ``source`` when the property is None. HomeKit then cannot match
+        Active Identifier to an Input Source. Missing source does *not* hide the
+        iOS Remote widget (Sony may also have source=None), but it does desync
+        the current input. Always publish a member of source_list.
+        """
+        names = build_source_list(self._sources())
+        current = current_source_name(self._source, self._sources())
+        self._attr_source_list = names
+        self._attr_source = current
+        self._source = current
+        self._attr_volume_level = float(self._volume)
+        self._attr_is_volume_muted = bool(self._muted)
+        self._attr_media_title = current
+
+    @callback
+    def async_write_ha_state(self) -> None:
+        self._sync_media_attrs()
+        super().async_write_ha_state()
+
     @property
     def state(self) -> MediaPlayerState:
         """ON or OFF only — same as official BraviaTVMediaPlayer."""
         if self._is_on:
             return MediaPlayerState.ON
         return MediaPlayerState.OFF
-
-    @property
-    def is_volume_muted(self) -> bool:
-        return self._muted
-
-    @property
-    def volume_level(self) -> float | None:
-        """Absolute volume 0..1 so HomeKit adds TelevisionSpeaker CHAR_VOLUME."""
-        return self._volume
-
-    @property
-    def source(self) -> str | None:
-        """Always a member of source_list (HomeKit CHAR_ACTIVE_IDENTIFIER)."""
-        return current_source_name(self._source, self._sources())
-
-    @property
-    def source_list(self) -> list[str]:
-        """Always at least one input so HomeKit creates Input Source services."""
-        return build_source_list(self._sources())
-
-    @property
-    def media_title(self) -> str | None:
-        """Title of current playing media (active input)."""
-        return self.source
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -224,6 +223,7 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
             names = build_source_list(self._sources())
             if names:
                 self._source = names[0]
+        self._sync_media_attrs()
 
         runtime = self.hass.data.setdefault(DOMAIN, {}).setdefault(
             self._entry.entry_id, {}
