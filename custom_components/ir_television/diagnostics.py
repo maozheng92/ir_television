@@ -12,6 +12,8 @@ from .actions import (
     build_source_list,
     compute_supported_features,
     describe_homekit_entries,
+    homekit_accessory_entries_for_entity,
+    pick_homekit_bridge_entry_id,
 )
 from .const import CONF_COMMANDS, CONF_POWER_SENSOR, CONF_SOURCES, DOMAIN, HOMEKIT_DOMAIN
 
@@ -27,10 +29,11 @@ async def async_get_config_entry_diagnostics(
     runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id) or {}
     tv_id = runtime.get("tv_entity_id") if isinstance(runtime, dict) else None
     state = hass.states.get(str(tv_id)) if tv_id else None
-    homekit_pairs = [
-        (dict(hk.data), dict(hk.options))
+    homekit_triples = [
+        (dict(hk.data), dict(hk.options), hk.entry_id)
         for hk in hass.config_entries.async_entries(HOMEKIT_DOMAIN)
     ]
+    homekit_pairs = [(data, options) for data, options, _ in homekit_triples]
     attrs = dict(state.attributes) if state is not None else {}
     return {
         "entry": async_redact_data(
@@ -63,4 +66,10 @@ async def async_get_config_entry_diagnostics(
             "assumed_state": attrs.get("assumed_state"),
         },
         "homekit_entries": describe_homekit_entries(homekit_pairs),
+        "homekit_bridge_entry_id": pick_homekit_bridge_entry_id(homekit_triples),
+        "homekit_accessory_entry_ids": homekit_accessory_entries_for_entity(
+            homekit_triples, str(tv_id)
+        )
+        if tv_id
+        else [],
     }

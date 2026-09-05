@@ -1,13 +1,17 @@
-"""Recreate the HomeKit *media_player* accessory with a new pairing identity.
+"""Put the IR TV on the same HomeKit path as official Sony Bravia.
 
-A complete Television IID dump (D8 + E8 RemoteKey + HDMI inputs + speaker) means
-HomeKit already built the right accessory. ``homekit.reset_accessory`` only
-rebuilds services on the *same* pairing MAC — iOS devices that once failed
-``pair verify`` keep a stale UUID and never list the TV in Control Center.
+Sony TVs in this setup have **no AirPlay and no native HomeKit**. The working
+path is:
 
-Deleting the HomeKit config entry and starting a fresh ``source=accessory``
-flow is what actually rotates the identity. Sony Bravia does not need this
-because its accessory was paired cleanly the first time.
+1. Official ``braviatv`` ``media_player`` (device_class=tv)
+2. Home Assistant **HomeKit Bridge** includes that player
+3. HA auto-creates a separate **accessory-mode** HomeKit entry (HAP does not
+   allow Television on a bridge)
+4. Pair that accessory in the Apple Home app → Control Center Remote
+
+This module does the same for our ``media_player``: add it to the existing
+HomeKit Bridge filter, then create (or recreate) the accessory-mode entry HA
+would have split out. Never delete a bridge-mode entry — that would drop Sony.
 
 Do not import this module from ``actions.py``.
 """
@@ -19,11 +23,19 @@ import logging
 from homeassistant.core import HomeAssistant
 
 from .actions import (
+    build_bridge_filter_including,
     collect_homekit_ports,
-    homekit_entries_for_entity,
+    homekit_accessory_entries_for_entity,
+    homekit_filter_dict,
     next_homekit_port,
+    pick_homekit_bridge_entry_id,
 )
-from .const import HOMEKIT_DOMAIN, HOMEKIT_PORT
+from .const import (
+    HOMEKIT_DOMAIN,
+    HOMEKIT_FILTER,
+    HOMEKIT_INCLUDE_ENTITIES,
+    HOMEKIT_PORT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,29 +52,36 @@ def _homekit_triples(hass: HomeAssistant) -> list[tuple[dict, dict, str]]:
 async def async_recreate_homekit_tv_accessory(
     hass: HomeAssistant, entity_ids: list[str]
 ) -> None:
-    """Remove existing HomeKit entries for these entities and pair the TV again."""
+    """Add the TV to the existing HomeKit Bridge, then pair it as an accessory."""
     tv_id = next((eid for eid in entity_ids if eid.startswith("media_player.")), None)
     if tv_id is None or hass.states.get(tv_id) is None:
-        _LOGGER.warning("Cannot recreate HomeKit TV accessory; media_player is missing")
+        _LOGGER.warning("Cannot expose IR TV to HomeKit; media_player is missing")
         await _async_notify(
             hass,
-            "红外电视：没有 media_player 实体，无法重建 HomeKit 配件。",
+            "红外电视：没有 media_player 实体，无法按索尼方式接入 HomeKit。",
         )
         return
 
     triples = _homekit_triples(hass)
     to_remove: list[str] = []
     for eid in entity_ids:
-        for entry_id in homekit_entries_for_entity(triples, eid):
+        for entry_id in homekit_accessory_entries_for_entity(triples, eid):
             if entry_id not in to_remove:
                 to_remove.append(entry_id)
 
     for entry_id in to_remove:
         try:
             await hass.config_entries.async_remove(entry_id)
-            _LOGGER.info("Removed HomeKit entry %s before recreating TV accessory", entry_id)
+            _LOGGER.info(
+                "Removed accessory-mode HomeKit entry %s before re-exposing TV",
+                entry_id,
+            )
         except Exception:  # noqa: BLE001
-            _LOGGER.exception("Could not remove HomeKit entry %s", entry_id)
+            _LOGGER.exception("Could not remove HomeKit accessory entry %s", entry_id)
+
+    triples = _homekit_triples(hass)
+    bridge_id = pick_homekit_bridge_entry_id(triples)
+    bridge_note = await _async_include_on_bridge(hass, tv_id, bridge_id)
 
     remaining = [
         (dict(entry.data), dict(entry.options))
@@ -80,33 +99,72 @@ async def async_recreate_homekit_tv_accessory(
         await _async_notify(
             hass,
             (
-                f"无法自动为 `{tv_id}` 创建 HomeKit 配件。请：设置 → 设备与服务 → 添加集成 → "
-                "**HomeKit 桥接** → 模式选 **配件 (accessory)**，只勾选 `{tv_id}`。"
+                f"{bridge_note}\n\n"
+                f"无法自动为 `{tv_id}` 创建配件模式 HomeKit。请：设置 → 设备与服务 → "
+                "添加集成 → **HomeKit 桥接** → 勾选 `media_player` 域"
+                "（和当初加索尼一样）。HA 会为每台电视自动拆出一条配件，再扫**那条配件**的二维码，"
+                "不要扫主桥。"
             ),
         )
         return
 
     removed_note = (
-        f"已删除 {len(to_remove)} 条旧 HomeKit 条目。" if to_remove else "原来没有对应的 HomeKit 条目。"
+        f"已删除 {len(to_remove)} 条旧的**配件模式** HomeKit（主桥未动）。"
+        if to_remove
+        else "原来没有这条电视的配件模式条目。"
     )
     await _async_notify(
         hass,
         (
-            f"{removed_note} 已为 `{tv_id}` 新建 **配件模式** HomeKit（端口 {port}）。\n\n"
-            "你贴出的 iids 本来就是完整 Television（RemoteKey + HDMI1–4 + 扬声器）。"
-            "控制中心仍不列出，是 **配对身份没换掉**（`reset_accessory` 不够），"
-            "或和家里 **原厂 TCL HomeKit/AirPlay** 同名抢发现。"
-            "索尼出现在「隔空播放遥控器」里，经常是电视自己的 AirPlay 2，不是 HA braviatv。\n\n"
+            f"{removed_note} {bridge_note} "
+            f"已为 `{tv_id}` 新建配件模式 HomeKit（端口 {port}），"
+            "机制与官方 HomeKit 桥接给索尼 Bravia 自动拆配件相同。\n\n"
+            "**索尼没有 AirPlay，也没有原厂 HomeKit。** "
+            "能出现在「隔空播放遥控器」里，是因为："
+            "官方 Sony Bravia TV 集成 → **HomeKit 桥接**（包含 `media_player`）→ "
+            "HA 再为电视拆出配件模式 → 家庭 App 配对那条配件。\n\n"
             "请立刻：\n"
-            "1. iPhone **家庭** App 删除所有叫 TCL / 红外电视 / TCL 遥控器 的配件（每台苹果设备都删）\n"
-            "2. HA **设置 → 设备与服务** 打开刚出现的那条 HomeKit，扫 **新二维码**（不要扫主桥）\n"
-            "3. 若家里已有原厂 TCL：把本集成设备改名为 **TCL红外** 再点一次本按钮\n"
-            "4. 用 Discovery 看 `_hap._tcp`：`ci` 必须是 31，配对成功后 `sf` 必须是 **0**"
-            "（`sf=1` 表示还没进家庭 App）。\n"
-            "5. `sf=0` 之后：家庭 App 里应是电视图标；控制中心遥控器 **点顶部设备名** 选这台"
-            "（默认常停在索尼/原厂 TCL 上）。`md=TCL` 和原厂重名时请改名为 TCL红外 再点一次本按钮"
+            "1. iPhone **家庭** App 删除旧的 TCL / 红外电视配件（每台苹果设备都删；"
+            "**不要**删索尼那条）\n"
+            "2. HA **设置 → 设备与服务** 打开刚出现的那条 HomeKit **配件**，扫 **新二维码**"
+            "（不要扫主桥的码）\n"
+            "3. 控制中心 → 隔空播放遥控器 → **点顶部设备名**，从列表里选这台"
+            "（默认常停在索尼上）\n"
+            "4. 用 Discovery 看 `_hap._tcp`：这条电视配件 `ci` 必须是 **31**，"
+            "配对后 `sf` 必须是 **0**。主桥是 `ci=2`，遥控器不认主桥上的电视。"
         ),
     )
+
+
+async def _async_include_on_bridge(
+    hass: HomeAssistant, tv_id: str, bridge_id: str | None
+) -> str:
+    """Add the TV to an existing HomeKit Bridge filter (Sony's include list)."""
+    if not bridge_id:
+        return (
+            "没有找到现有 **HomeKit 桥接**。"
+            "请先添加一次 HomeKit 桥接（和当初加索尼一样，勾选 `media_player`），"
+            "再点本按钮。"
+        )
+
+    entry = hass.config_entries.async_get_entry(bridge_id)
+    if entry is None:
+        return "找不到 HomeKit 桥接配置条目。"
+
+    options = dict(entry.options)
+    filt = homekit_filter_dict(dict(entry.data), options)
+    already = tv_id in [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
+    options[HOMEKIT_FILTER] = build_bridge_filter_including(filt, tv_id)
+    hass.config_entries.async_update_entry(entry, options=options)
+    try:
+        await hass.config_entries.async_reload(entry.entry_id)
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception("Could not reload HomeKit bridge %s", bridge_id)
+
+    title = entry.title or bridge_id
+    if already:
+        return f"`{tv_id}` 本来就在 HomeKit 桥 **{title}** 的包含列表里。"
+    return f"已把 `{tv_id}` 加进 HomeKit 桥 **{title}** 的包含列表（与索尼同一座桥）。"
 
 
 async def _async_notify(hass: HomeAssistant, message: str) -> None:
@@ -114,7 +172,7 @@ async def _async_notify(hass: HomeAssistant, message: str) -> None:
         "persistent_notification",
         "create",
         {
-            "title": "红外电视：重建 HomeKit 电视配件",
+            "title": "红外电视：按索尼方式接入 HomeKit",
             "message": message,
             "notification_id": _NOTIFY_ID,
         },

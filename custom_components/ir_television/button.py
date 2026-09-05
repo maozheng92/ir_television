@@ -73,7 +73,7 @@ class IRTelevisionKeyButton(ButtonEntity):
 
 
 class IRTelevisionRecreateHomeKitButton(ButtonEntity):
-    """Delete and recreate the HomeKit TV accessory (new pairing identity)."""
+    """Add this TV to the existing HomeKit Bridge, same path as Sony Bravia."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False

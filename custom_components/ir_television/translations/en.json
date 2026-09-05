@@ -361,7 +361,7 @@
       "home": { "name": "Home" },
       "menu": { "name": "Menu" },
       "info": { "name": "Info" },
-      "recreate_homekit": { "name": "Rebuild HomeKit TV accessory" }
+      "recreate_homekit": { "name": "Add via HomeKit Bridge (same as Sony)" }
     }
   }
 }

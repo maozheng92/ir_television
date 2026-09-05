@@ -47,10 +47,13 @@ from .const import (
     CONF_REMOTE_ENTITY,
     DEFAULT_SOURCE_NAME,
     HOMEKIT_DEFAULT_BRIDGE_PORT,
+    HOMEKIT_EXCLUDE_ENTITIES,
     HOMEKIT_FILTER,
+    HOMEKIT_INCLUDE_DOMAINS,
     HOMEKIT_INCLUDE_ENTITIES,
     HOMEKIT_MODE,
     HOMEKIT_MODE_ACCESSORY,
+    HOMEKIT_MODE_BRIDGE,
     HOMEKIT_PORT,
     HOMEKIT_TV_FEATURES,
     INTENT_PAUSE,
@@ -206,22 +209,38 @@ def decode_hap_mdns_txt(txt: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def homekit_entry_mode(data: dict[str, Any], options: dict[str, Any]) -> str:
+    """Return HomeKit mode. Missing mode is a bridge (HA default)."""
+    mode = options.get(HOMEKIT_MODE, data.get(HOMEKIT_MODE))
+    if mode == HOMEKIT_MODE_ACCESSORY:
+        return HOMEKIT_MODE_ACCESSORY
+    return HOMEKIT_MODE_BRIDGE
+
+
+def homekit_filter_dict(data: dict[str, Any], options: dict[str, Any]) -> dict[str, Any]:
+    """Return the entity filter. Options win after a UI edit."""
+    for blob in (options, data):
+        filt = blob.get(HOMEKIT_FILTER)
+        if isinstance(filt, dict):
+            return dict(filt)
+    return {}
+
+
 def describe_homekit_entries(
     entries: list[tuple[dict[str, Any], dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     """Summarize HomeKit config entries (data, options) for diagnostics."""
     described: list[dict[str, Any]] = []
     for data, options in entries:
-        blob = {**data, **options}
-        filt = blob.get(HOMEKIT_FILTER) or {}
-        if not isinstance(filt, dict):
-            filt = {}
+        filt = homekit_filter_dict(data, options)
         described.append(
             {
-                "mode": blob.get(HOMEKIT_MODE),
-                "name": blob.get("name"),
-                "port": blob.get(HOMEKIT_PORT),
+                "mode": homekit_entry_mode(data, options),
+                "name": options.get("name", data.get("name")),
+                "port": options.get(HOMEKIT_PORT, data.get(HOMEKIT_PORT)),
+                "include_domains": list(filt.get(HOMEKIT_INCLUDE_DOMAINS) or []),
                 "include_entities": list(filt.get(HOMEKIT_INCLUDE_ENTITIES) or []),
+                "exclude_entities": list(filt.get(HOMEKIT_EXCLUDE_ENTITIES) or []),
             }
         )
     return described
@@ -231,20 +250,85 @@ def homekit_entries_for_entity(
     entries: list[tuple[dict[str, Any], dict[str, Any], str]],
     entity_id: str,
 ) -> list[str]:
-    """Return config entry ids whose include filter contains ``entity_id``.
+    """Return config entry ids whose include_entities list contains ``entity_id``.
 
-    Each item is ``(data, options, entry_id)``.
+    Each item is ``(data, options, entry_id)``. Does not treat include_domains
+    as a match — a HomeKit *bridge* that includes the ``media_player`` domain
+    must never be deleted just because this TV exists.
     """
     matches: list[str] = []
     for data, options, entry_id in entries:
-        blob = {**data, **options}
-        filt = blob.get(HOMEKIT_FILTER) or {}
-        if not isinstance(filt, dict):
-            continue
+        filt = homekit_filter_dict(data, options)
         include = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
         if entity_id in include:
             matches.append(entry_id)
     return matches
+
+
+def homekit_accessory_entries_for_entity(
+    entries: list[tuple[dict[str, Any], dict[str, Any], str]],
+    entity_id: str,
+) -> list[str]:
+    """Accessory-mode HomeKit entries that expose exactly this entity.
+
+    Safe to delete/recreate. Never returns a bridge (Sony lives on that bridge).
+    """
+    matches: list[str] = []
+    for data, options, entry_id in entries:
+        if homekit_entry_mode(data, options) != HOMEKIT_MODE_ACCESSORY:
+            continue
+        filt = homekit_filter_dict(data, options)
+        include = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
+        if entity_id in include:
+            matches.append(entry_id)
+    return matches
+
+
+def pick_homekit_bridge_entry_id(
+    entries: list[tuple[dict[str, Any], dict[str, Any], str]],
+) -> str | None:
+    """Pick the HomeKit Bridge that already exposes TVs (Sony's path).
+
+    Prefers a bridge that includes the ``media_player`` domain or any
+    ``media_player.*`` entity — that is the instance Sony Bravia was added to.
+    """
+    scored: list[tuple[int, str]] = []
+    for data, options, entry_id in entries:
+        if homekit_entry_mode(data, options) == HOMEKIT_MODE_ACCESSORY:
+            continue
+        filt = homekit_filter_dict(data, options)
+        include_domains = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_DOMAINS) or [])]
+        include_entities = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
+        score = 0
+        if "media_player" in include_domains:
+            score += 2
+        if any(item.startswith("media_player.") for item in include_entities):
+            score += 1
+        scored.append((score, entry_id))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return scored[0][1]
+
+
+def build_bridge_filter_including(
+    filt: dict[str, Any] | None, entity_id: str
+) -> dict[str, Any]:
+    """Return a copy of ``filt`` that explicitly includes ``entity_id``.
+
+    Home Assistant includes an entity listed in ``include_entities`` even when
+    the domain is not in ``include_domains``. Also drops the entity from
+    ``exclude_entities`` so a previous exclude cannot hide it.
+    """
+    new_filt = dict(filt or {})
+    include_entities = [str(item) for item in (new_filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
+    exclude_entities = [str(item) for item in (new_filt.get(HOMEKIT_EXCLUDE_ENTITIES) or [])]
+    if entity_id not in include_entities:
+        include_entities.append(entity_id)
+    exclude_entities = [item for item in exclude_entities if item != entity_id]
+    new_filt[HOMEKIT_INCLUDE_ENTITIES] = include_entities
+    new_filt[HOMEKIT_EXCLUDE_ENTITIES] = exclude_entities
+    return new_filt
 
 
 def homekit_accessory_entity_ids(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> set[str]:

@@ -75,6 +75,10 @@ copy_config = actions.copy_config
 find_source = actions.find_source
 has_useful_config = actions.has_useful_config
 homekit_accessory_entity_ids = actions.homekit_accessory_entity_ids
+homekit_accessory_entries_for_entity = actions.homekit_accessory_entries_for_entity
+build_bridge_filter_including = actions.build_bridge_filter_including
+homekit_entry_mode = actions.homekit_entry_mode
+pick_homekit_bridge_entry_id = actions.pick_homekit_bridge_entry_id
 next_homekit_port = actions.next_homekit_port
 normalize_power_sensor = actions.normalize_power_sensor
 parse_action_input = actions.parse_action_input
@@ -525,16 +529,103 @@ class HomeKitIidDecodeTests(unittest.TestCase):
                 {},
                 "entry_remote",
             ),
-            ({"mode": "bridge", "port": 21063}, {}, "entry_bridge"),
+            (
+                {"mode": "bridge", "port": 21063},
+                {"filter": {"include_entities": ["media_player.tcl"]}},
+                "entry_bridge",
+            ),
         ]
         self.assertEqual(
             actions.homekit_entries_for_entity(entries, "media_player.tcl"),
+            ["entry_tv", "entry_bridge"],
+        )
+        self.assertEqual(
+            homekit_accessory_entries_for_entity(entries, "media_player.tcl"),
             ["entry_tv"],
         )
         self.assertEqual(
             actions.homekit_entries_for_entity(entries, "remote.tcl"),
             ["entry_remote"],
         )
+        self.assertEqual(
+            homekit_accessory_entries_for_entity(entries, "remote.tcl"),
+            ["entry_remote"],
+        )
+
+    def test_never_treats_sony_bridge_as_accessory_to_delete(self) -> None:
+        entries = [
+            (
+                {"mode": "bridge", "port": 21063, "name": "HASS Bridge"},
+                {
+                    "filter": {
+                        "include_domains": ["media_player", "light"],
+                        "include_entities": ["media_player.bravia_kd_55x9000b"],
+                    }
+                },
+                "sony_bridge",
+            ),
+            (
+                {
+                    "mode": "accessory",
+                    "filter": {"include_entities": ["media_player.tcl"]},
+                },
+                {},
+                "tcl_accessory",
+            ),
+        ]
+        self.assertEqual(pick_homekit_bridge_entry_id(entries), "sony_bridge")
+        self.assertEqual(
+            homekit_accessory_entries_for_entity(entries, "media_player.tcl"),
+            ["tcl_accessory"],
+        )
+        self.assertEqual(
+            homekit_accessory_entries_for_entity(
+                entries, "media_player.bravia_kd_55x9000b"
+            ),
+            [],
+        )
+
+    def test_picks_media_player_bridge_over_empty_bridge(self) -> None:
+        entries = [
+            ({"mode": "bridge", "port": 21063}, {}, "empty_bridge"),
+            (
+                {"port": 21064},
+                {"mode": "bridge", "filter": {"include_domains": ["media_player"]}},
+                "tv_bridge",
+            ),
+            (
+                {
+                    "mode": "accessory",
+                    "filter": {"include_entities": ["media_player.sony"]},
+                },
+                {},
+                "sony_acc",
+            ),
+        ]
+        self.assertEqual(pick_homekit_bridge_entry_id(entries), "tv_bridge")
+
+    def test_missing_mode_is_bridge(self) -> None:
+        self.assertEqual(homekit_entry_mode({"port": 21063}, {}), "bridge")
+        self.assertEqual(
+            homekit_entry_mode({}, {"mode": "accessory"}),
+            "accessory",
+        )
+
+    def test_bridge_filter_includes_entity_and_drops_exclude(self) -> None:
+        filt = build_bridge_filter_including(
+            {
+                "include_domains": ["light"],
+                "include_entities": ["light.kitchen"],
+                "exclude_entities": ["media_player.tcl"],
+            },
+            "media_player.tcl",
+        )
+        self.assertEqual(
+            filt["include_entities"],
+            ["light.kitchen", "media_player.tcl"],
+        )
+        self.assertEqual(filt["exclude_entities"], [])
+        self.assertEqual(filt["include_domains"], ["light"])
 
     def test_unpaired_television_mdns_is_not_listed(self) -> None:
         decoded = actions.decode_hap_mdns_txt(

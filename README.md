@@ -18,7 +18,7 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
 - 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上与官方 Sony Bravia 相同的功能位（`supported_features: 155581`，含 `PLAY_MEDIA` / `BROWSE_MEDIA`）
 - 当前输入与索尼 Bravia 一样走实体属性 `source` / `source_list`（更多信息里会显示下拉框）。红外读不到真实 HDMI，显示的是上次选择或列表第一项，不会是空的
-- HomeKit 配件信息 **Model (0x21)** 为 **Media Player**（与官方 braviatv 一致）。改完后需 `homekit.reset_accessory` 或点「重建 HomeKit 电视配件」，否则 iOS 仍缓存旧的 `IR / Button TV`
+- HomeKit 配件信息 **Model (0x21)** 为 **Media Player**（与官方 braviatv 一致）。改完后需点「按索尼方式接入 HomeKit」，否则 iOS 仍缓存旧的 `IR / Button TV`
 - **`remote` 与电视是同一设备上的第二个实体**（`_attr_name = None`，无 ACTIVITY），只给 HA 自动化发红外用。**不会**单独创建 HomeKit 配件——和官方 braviatv 一样，iOS 遥控器只认 `media_player`
 - 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到 `media_player`
 
@@ -26,18 +26,19 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 
 这是 **系统控制中心 → 隔空播放遥控器 / Apple TV Remote**，不是 Companion 主屏幕小组件。
 
-官方 **Sony Bravia TV** 集成会：
+**索尼电视本身没有 AirPlay，也没有原厂 HomeKit。** 能出现在控制中心遥控器里，整条路径都是 Home Assistant：
 
-1. **始终**声明一整套电视功能位（含 `PLAY_MEDIA` / `BROWSE_MEDIA`），状态只有 **ON / OFF**。
-2. 电视和遥控器在 HA 里是**同一设备上的两个实体**；HomeKit **只暴露 `media_player`**。不会为 `remote` 再建一条配件。
-3. 你现有的 HomeKit 集成（桥接会自动把 `device_class=tv` 的播放器拆成配件，或你手动把该 `media_player` 加进配件模式）负责出现在「家庭」里。
+1. 官方 **Sony Bravia TV** 集成提供 `media_player`（`device_class=tv`，功能位 `155581`，状态只有 ON / OFF）。
+2. 官方 **HomeKit 桥接** 包含该 `media_player`。
+3. HAP **不允许把 Television 挂在桥上**，所以 HA 会再为这台电视**自动拆出一条配件模式** HomeKit。家庭 App 扫的是**那条配件**的码，不是主桥。
+4. 配对后，控制中心遥控器认的就是这条 `TelevisionMediaPlayer`。
 
-本集成对齐上述模型：**不再自动创建 HomeKit 配置条目**。请像加索尼那样，把 **`media_player.tcl`（或你的电视实体）** 交给 HomeKit，并删掉以前多出来的「TCL 遥控器」配件。
+本集成对齐同一条路：`media_player` 与 braviatv 相同；`remote` 只给 HA 自动化用，**不会**单独进 HomeKit。点设备上的 **按索尼方式接入 HomeKit**：把播放器加进**已有的那座 HomeKit 桥**（和索尼同一座），再按 HA 官方机制拆出配件模式。删掉以前多出来的「TCL 遥控器」配件。
 
 Apple 显示遥控器仍需要：
 
 1. 实体是 `device_class=tv` 的完整 Television（本集成现在始终如此，功能位 `155581`）。
-2. 这条 **`media_player`** 已在「家庭」App 里配对（走你现有的 HomeKit 桥 / 配件，和索尼同一条路径）。
+2. 这条 **`media_player`** 已按上面第 2–3 步接入 **同一座 HomeKit 桥**，并在「家庭」App 里配对配件（不要扫主桥）。
 3. iPhone：**设置 → 控制中心** 打开 **隔空播放遥控器 / 遥控器**。
 
 HomeKit 方向键映射（未映射则忽略）：
@@ -77,27 +78,22 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 设置 → 设备与服务 → 添加集成 → 搜索 **红外电视** / **IR Television**。至少映射电源；方向键请映射上/下/左/右/确定/返回，控制中心遥控器的 D-pad 才会发红外。输入源可选（不填也会有默认 **TV**）。
 
-**3. 把 `media_player` 交给 HomeKit（和索尼同一条路径，不要给 remote 建配件）**
+**3. 按索尼同一条路径交给 HomeKit（桥接 → 自动拆配件，不要给 remote 建配件）**
 
-更新到 **1.6.0** 后：
+索尼：**Bravia 集成 → HomeKit 桥接 → HA 为电视拆出配件模式 → 扫配件码**。没有 AirPlay。
 
-- `remote` **不再**带 ACTIVITY，也**不会**再自动创建 HomeKit 配件
-- `media_player` 功能位变为与索尼相同的 **155581**（含浏览/播放媒体）
-- 设备上的「重置 HomeKit 配件」只重置 **`media_player`**
+本集成 **1.6.7** 起，设备上的 **按索尼方式接入 HomeKit** 会：
 
-请立刻清掉以前多出来的配件：
+- 把 **`media_player.tcl`** 加进**已有的那座 HomeKit 桥**（优先选已包含 `media_player` / 索尼的那座）
+- **不会删除主桥**（索尼还在那座桥上）
+- 只删掉这条电视（以及误建的 `remote.*`）的旧**配件模式**条目，再按 HA 官方机制新建一条配件
+
+请立刻：
 
 1. HA **设置 → 设备与服务**：删除实体为 `remote.*` / 名称像 **TCL 遥控器** 的 HomeKit **配件**条目（若有）
-2. 确认 HomeKit 里包含的是 **`media_player.tcl`**（和索尼一样只包含电视播放器）。若用桥接：让 `media_player` 域被包含，电视会自动拆成配件；若用配件模式：只勾选这个 `media_player`
-3. 点设备上的 **重置 HomeKit 配件**，或：
-
-```yaml
-action: homekit.reset_accessory
-data:
-  entity_id: media_player.tcl
-```
-
-4. iPhone **家庭** App 删除旧的 TCL / 「TCL 遥控器」，再扫 **media_player 那条** HomeKit 配件的新二维码（不要扫主桥，也不要和家里原生 TCL HomeKit 电视搞混）
+2. 确认已有一条 **HomeKit 桥接**（就是当初给索尼用的那条）。没有的话先添加桥接并勾选 `media_player`
+3. 点设备上的 **按索尼方式接入 HomeKit**
+4. iPhone **家庭** App 删除旧的 TCL / 「TCL 遥控器」（不要删索尼），再扫 **media_player 那条配件** 的新二维码（不要扫主桥）
 5. 控制中心 → 隔空播放遥控器 → **点顶部设备名**，从列表里选 TCL（默认常常还停在索尼上）
 
 `media_player.tcl` 对齐索尼：`device_class: tv`、`source_list`、`state` 只有 on/off、`supported_features: 155581`、`assumed_state: true`。
@@ -110,15 +106,14 @@ data:
 - `D9_HDMI1` … `D9_HDMI4` 四个输入源
 - `113` Television Speaker（音量/静音）
 
-那 **HomeKit 配件已经是完整电视**，再改 `supported_features` 也救不了控制中心。`homekit.reset_accessory` **不会更换配对 MAC**，iPhone 上残留的 `pair verify` UUID 仍然对不上。
+那 **配件本身已是完整 Television**。若它是单独建的配件、却没进**索尼那座 HomeKit 桥**，控制中心仍可能不列。`homekit.reset_accessory` **不会**把实体加进主桥，也不会换配对 MAC。
 
-请更新后点设备上的 **重建 HomeKit 电视配件**（会删掉旧 HomeKit 条目并新建二维码），然后：
+请更新后点 **按索尼方式接入 HomeKit**（加进主桥 + 换新配件二维码），然后：
 
-1. 家庭 App **每台苹果设备**都删掉 TCL / TCL 遥控器
+1. 家庭 App **每台苹果设备**都删掉 TCL / TCL 遥控器（保留索尼）
 2. 只扫 **新的** 配件二维码（不要扫主桥）
-3. 家里若已有 **原厂 TCL HomeKit/AirPlay**：把本集成改名为 **TCL红外** 再点一次重建，避免同名抢发现
-4. 用 Discovery 看 `_hap._tcp`：`ci` 必须是 **31**；配对成功后 `sf` 必须是 **0**
-5. 控制中心遥控器 **点顶部设备名** 选这台（默认常停在索尼上）
+3. 用 Discovery 看 `_hap._tcp`：电视配件 `ci` 必须是 **31**；配对成功后 `sf` 必须是 **0**。主桥是 `ci=2`
+4. 控制中心遥控器 **点顶部设备名** 选这台（默认常停在索尼上）
 
 ### 如何读 `_hap._tcp` mDNS
 
@@ -139,7 +134,7 @@ sf = 0
 | `ci` | HAP 配件类别（只影响图标/分组，不改变 Television 服务本身）：**24 = Apple TV**，**31 = Television**（官方 HomeKit / pyhap / HAP-NodeJS）。HA 的 `TelevisionMediaPlayer` 广播的就是 **31**，这是对的。不要改成 24。 |
 | `ci = 31` | 这条配件是 **Television**。实体 / HomeKit 侧已经做对了。 |
 | `sf = 1` | **未配对**。控制中心遥控器不会列出。 |
-| `sf = 0` | **已配对**。HAP 广播已经允许 iOS 把它当作电视遥控器。若控制中心仍没有，是 iOS 选错设备或和原厂 TCL/索尼 AirPlay 同名，不是缺 Television 服务。 |
+| `sf = 0` | **已配对**。HAP 广播已经允许 iOS 把它当作电视遥控器。若控制中心仍没有：先确认它已加进**索尼同一座 HomeKit 桥**，再点顶部设备名切换（默认常停在索尼上）。 |
 | `md = TCL` | 广播名称。家里已有原厂 TCL 时，控制中心列表里可能有两个 TCL，默认停在原厂/索尼上。 |
 | `id` | 这条 HA 配件的身份。家庭 App 里的 TCL 必须对应这个 `id`。 |
 
@@ -148,9 +143,9 @@ sf = 0
 1. 打开 **家庭** App，确认这台 TCL 是 **电视图标**（能开关、切 HDMI），不是开关/网桥
 2. iPhone **设置 → 控制中心** 已加入 **隔空播放遥控器**
 3. 打开遥控器后 **点最上方设备名**，在列表里选 HA 这台（不要选索尼，也不要选原厂 TCL）
-4. 若列表里根本没有：把本集成改名为 **TCL红外** 再重建配件，避免 `md = TCL` 和原厂抢名字
+4. 若列表里根本没有：点 **按索尼方式接入 HomeKit**，确认 `media_player` 已在索尼那座桥的包含列表里，再扫新配件码
 
-索尼能出现在「隔空播放遥控器」里，经常是电视自己的 **AirPlay 2**，不是 HA `braviatv`。红外电视没有 AirPlay，只能靠这条已配对的 HomeKit 电视配件。
+索尼能出现在「隔空播放遥控器」里，**不是**电视自己的 AirPlay / HomeKit，而是官方 `braviatv` + **HomeKit 桥接** 拆出的配件。红外电视必须走同一条桥。
 
 **4. 打开控制中心遥控器**
 
@@ -158,7 +153,7 @@ sf = 0
 2. 从屏幕右上角下滑打开控制中心，点遥控器图标
 3. 应能看到刚配对的那台电视。电源、音量走 `media_player`；方向键走本集成的 HomeKit 事件
 
-同一局域网；电视配件必须已在「家庭」中配对。主桥里有这台电视、配件模式未配对时，遥控器**不会**出现。
+同一局域网；必须配对的是 **配件模式** 那条电视（`ci=31`），不是主桥（`ci=2`）。主桥只负责把实体纳入过滤；遥控器认的是拆出来的 Television 配件。
 
 ### 日志出现 `attempted pair verify without being paired first`
 
@@ -173,7 +168,7 @@ sf = 0
 按这个清干净再配一次（和第一次加索尼配件一样）：
 
 1. iPhone **家庭** App：删除所有叫 TCL / 红外电视 的配件（每台 iPhone、iPad 都看一眼）
-2. HA **设置 → 设备与服务**：只保留**一条**包含这台 **`media_player.*`** 的 HomeKit（桥接拆出的电视配件，或配件模式且只勾了播放器）。删掉 `remote.*` 的多余配件
+2. HA **设置 → 设备与服务**：**保留索尼那座 HomeKit 桥**，另保留一条只含这台 **`media_player.*`** 的配件模式条目。删掉 `remote.*` 的多余配件，不要删主桥
 3. 打开这条 HomeKit 的 **配对二维码**，用**一台** iPhone 添加配件（不要扫主桥）
 4. 其它设备等「家庭」iCloud 同步，不要各自再扫码
 5. 若提示无法添加：删掉该 HomeKit 配件条目 → 重启 HA → 用新二维码再配
@@ -276,9 +271,9 @@ It does **not** talk to the TV over HDMI-CEC or a network API. It fires commands
 
 This is the **Apple Control Center → Apple TV Remote / Remote**, not the Home Assistant Companion home-screen widget.
 
-Official **Sony Bravia TV** advertises a full Television feature set on **one** `media_player`. The HA `remote` entity is unnamed, has no ACTIVITY flag, and is **not** a HomeKit accessory. HomeKit (bridge auto-split or accessory include) exposes only that media player.
+Sony TVs here have **no AirPlay and no native HomeKit**. The working path is official **braviatv** → **HomeKit Bridge** (include `media_player`) → HA auto-splits a Television accessory → pair that accessory. This integration matches that surface on one `media_player`. The HA `remote` is unnamed, has no ACTIVITY flag, and is **not** a HomeKit accessory.
 
-Include **`media_player.*`** in HomeKit. Delete any extra accessory that was created for `remote.*` / “TCL 遥控器”. After upgrading, `homekit.reset_accessory` on the media player (feature bits changed to 155581), delete the old Home accessory, re-scan, then tap the **title** in Control Center Remote to switch from Sony to this TV.
+Press **Add via HomeKit Bridge (same as Sony)** on the device. That adds `media_player.*` to the existing bridge (never deletes the bridge) and recreates the accessory-mode entry HA would split out. Delete leftover accessories for `remote.*`. In Control Center Remote, tap the **title** to switch from Sony to this TV.
 
 ### Make the Remote appear
 
@@ -292,17 +287,9 @@ Copy the folder `custom_components/ir_television` to `<config>/custom_components
 
 **Settings → Devices & Services → Add Integration → IR Television**. Map power at minimum. Map up/down/left/right/ok/back if you want the Control Center D-pad to send IR. Custom sources are optional.
 
-**3. Pair the HomeKit *media_player* (not the remote)**
+**3. Pair via the same HomeKit Bridge as Sony (not the remote)**
 
-Sony does not create a separate HomeKit accessory for its remote. Include `media_player.tcl` in HomeKit the same way. Delete leftover accessory-mode entries for `remote.*`. Then:
-
-```yaml
-action: homekit.reset_accessory
-data:
-  entity_id: media_player.tcl
-```
-
-Delete TCL in the Home app, scan the **media_player** accessory QR, and in Control Center Remote tap the **top device name** to pick this TV (it often stays on Sony).
+Sony has no AirPlay. Include `media_player.tcl` on the **existing HomeKit Bridge**, then pair the **accessory-mode** entry HA splits out (TVs cannot live on the bridge itself). Press **Add via HomeKit Bridge (same as Sony)**. Delete leftover accessory-mode entries for `remote.*`. Delete TCL in the Home app (keep Sony), scan the **media_player accessory** QR — not the bridge — and in Control Center Remote tap the **top device name** to pick this TV.
 
 **4. Enable Control Center Remote**
 
@@ -310,11 +297,11 @@ Delete TCL in the Home app, scan the **media_player** accessory QR, and in Contr
 2. Open Control Center (swipe down from the top-right) and tap the Remote icon
 3. The paired TV should be listed. Power and volume use `media_player` services; D-pad uses `homekit_tv_remote_key_pressed`.
 
-The iPhone must be on the same LAN. The TV accessory must be paired in Home. If it only exists inside the main bridge, the Remote will **not** appear.
+The iPhone must be on the same LAN. Pair the **accessory-mode** Television (`ci=31`), not the main bridge (`ci=2`). The bridge only holds the include filter; the Remote lists the split-out accessory.
 
 ### Log: `attempted pair verify without being paired first`
 
-This is a **stale HomeKit pairing**, not a bad IR mapping. An Apple device is trying to verify a pairing UUID that this HA accessory does not have. Remove TCL from the Home app on every iPhone/iPad, keep a single HomeKit **accessory** entry for this `media_player`, and pair with one iPhone's QR code. Other devices must join via iCloud Home sharing, not a second scan.
+This is a **stale HomeKit pairing**, not a bad IR mapping. An Apple device is trying to verify a pairing UUID that this HA accessory does not have. Remove TCL from the Home app on every iPhone/iPad (keep Sony), keep the **HomeKit Bridge** plus one accessory-mode entry for this `media_player`, and pair with one iPhone's QR code. Other devices must join via iCloud Home sharing, not a second scan.
 
 ### Prerequisites
 
@@ -363,7 +350,7 @@ custom_components/ir_television/
   flow_schemas.py
   media_player.py
   remote.py           # same device, no ACTIVITY, not a HomeKit accessory
-  homekit_expose.py   # rebuild HomeKit accessory with a new pairing identity
+  homekit_expose.py   # add media_player to existing HomeKit Bridge, then accessory-mode split
   button.py
   diagnostics.py
   icons.json
