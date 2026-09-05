@@ -18,6 +18,7 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
 - 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上与官方 Sony Bravia 相同的功能位（`supported_features: 155581`，含 `PLAY_MEDIA` / `BROWSE_MEDIA`）
 - 当前输入与索尼 Bravia 一样走实体属性 `source` / `source_list`（更多信息里会显示下拉框）。红外读不到真实 HDMI，显示的是上次选择或列表第一项，不会是空的
+- HomeKit 配件信息 **Model (0x21)** 为 **Media Player**（与官方 braviatv 一致）。改完后需 `homekit.reset_accessory` 或点「重建 HomeKit 电视配件」，否则 iOS 仍缓存旧的 `IR / Button TV`
 - **`remote` 与电视是同一设备上的第二个实体**（`_attr_name = None`，无 ACTIVITY），只给 HA 自动化发红外用。**不会**单独创建 HomeKit 配件——和官方 braviatv 一样，iOS 遥控器只认 `media_player`
 - 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到 `media_player`
 
