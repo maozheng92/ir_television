@@ -1,9 +1,7 @@
-"""Remote on the same TV device — not a separate HomeKit accessory.
+"""Remote on the same TV device — clone of braviatv.remote.BraviaTVRemote.
 
-Matches official braviatv.remote.BraviaTVRemote: ``_attr_name = None``, no
-``RemoteEntityFeature.ACTIVITY``. HomeKit Television / iOS Control Center
-Remote is built only from the ``media_player`` (device_class=tv). This entity
-exists so HA automations can call ``remote.send_command`` with IR key names.
+``_attr_name = None``, no ``RemoteEntityFeature.ACTIVITY``. HomeKit Television
+/ iOS Control Center Remote is built only from the ``media_player``.
 """
 
 from __future__ import annotations
@@ -16,13 +14,13 @@ from typing import Any
 from homeassistant.components.remote import ATTR_NUM_REPEATS, RemoteEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .actions import resolve_homekit_remote_key
 from .command_sender import async_send_action
-from .const import CONF_COMMANDS, CONF_NAME, DOMAIN, MANUFACTURER, MODEL
+from .const import CONF_COMMANDS, DOMAIN
+from .entity import IRTelevisionEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,18 +36,13 @@ async def async_setup_entry(
     async_add_entities([IRTelevisionRemote(hass, entry)])
 
 
-class IRTelevisionRemote(RemoteEntity):
-    """IR remote that shares the television device (Sony-style, no ACTIVITY)."""
+class IRTelevisionRemote(IRTelevisionEntity, RemoteEntity):
+    """Representation of an IR TV Remote — same public surface as BraviaTVRemote."""
 
-    _attr_has_entity_name = True
     _attr_name = None
-    _attr_icon = "mdi:remote"
-    _attr_should_poll = False
-    _attr_assumed_state = True
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self.hass = hass
-        self._entry = entry
+        super().__init__(hass, entry)
         self._attr_unique_id = f"{entry.entry_id}_remote"
 
     def _runtime(self) -> dict[str, Any]:
@@ -67,17 +60,8 @@ class IRTelevisionRemote(RemoteEntity):
         return self.hass.states.get(tv_id)
 
     @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name=self._entry.data.get(CONF_NAME) or self._entry.title,
-            manufacturer=MANUFACTURER,
-            model=MODEL,
-        )
-
-    @property
     def is_on(self) -> bool:
-        """Return true if the television is on."""
+        """Return true if device is on."""
         state = self._tv_state()
         if state is None:
             return False
@@ -106,7 +90,7 @@ class IRTelevisionRemote(RemoteEntity):
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the television on."""
+        """Turn the device on."""
         tv_id = self._tv_entity_id()
         if not tv_id:
             _LOGGER.warning("IR Television remote: media_player entity is not ready")
@@ -119,7 +103,7 @@ class IRTelevisionRemote(RemoteEntity):
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the television off."""
+        """Turn the device off."""
         tv_id = self._tv_entity_id()
         if not tv_id:
             return
@@ -131,7 +115,7 @@ class IRTelevisionRemote(RemoteEntity):
         )
 
     async def async_send_command(self, command: Iterable[str], **kwargs: Any) -> None:
-        """Send named keys (up/ok or HomeKit key_name) as IR/button."""
+        """Send a command to device."""
         repeats = kwargs.get(ATTR_NUM_REPEATS, 1)
         try:
             repeats = max(1, int(repeats))

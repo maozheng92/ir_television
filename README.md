@@ -18,7 +18,7 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
 - 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上与官方 Sony Bravia 相同的功能位（`supported_features: 155581`，含 `PLAY_MEDIA` / `BROWSE_MEDIA`）
 - 当前输入与索尼 Bravia 一样走实体属性 `source` / `source_list`（更多信息里会显示下拉框）。红外读不到真实 HDMI，显示的是上次选择或列表第一项，不会是空的
-- HomeKit 配件信息 **Model (0x21)** 为 **Media Player**（与官方 braviatv 一致）。改完后需点「按索尼方式接入 HomeKit」，否则 iOS 仍缓存旧的 `IR / Button TV`
+- HomeKit **Model** 与 braviatv 一样不写 `DeviceInfo.model`，由 HA HomeKit 回落到 **Media Player**。Manufacturer 仍是集成名（索尼是 `Sony`）
 - **`remote` 与电视是同一设备上的第二个实体**（`_attr_name = None`，无 ACTIVITY），只给 HA 自动化发红外用。**不会**单独创建 HomeKit 配件——和官方 braviatv 一样，iOS 遥控器只认 `media_player`
 - 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到 `media_player`
 
@@ -26,14 +26,19 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 
 这是 **系统控制中心 → 隔空播放遥控器 / Apple TV Remote**，不是 Companion 主屏幕小组件。
 
-**索尼电视本身没有 AirPlay，也没有原厂 HomeKit。** 能出现在控制中心遥控器里，整条路径都是 Home Assistant：
+两条路的 HomeKit 段**完全相同**：集成的 `media_player` → HomeKit 桥接（包含 `media_player`）→ HA 拆出配件模式电视 → 家庭 App 扫配件码。索尼没有 AirPlay / 原厂 HomeKit。
 
-1. 官方 **Sony Bravia TV** 集成提供 `media_player`（`device_class=tv`，功能位 `155581`，状态只有 ON / OFF）。
-2. 官方 **HomeKit 桥接** 包含该 `media_player`。
-3. HAP **不允许把 Television 挂在桥上**，所以 HA 会再为这台电视**自动拆出一条配件模式** HomeKit。家庭 App 扫的是**那条配件**的码，不是主桥。
-4. 配对后，控制中心遥控器认的就是这条 `TelevisionMediaPlayer`。
+差别只在**两个集成的实体**。HomeKit 的 `TelevisionMediaPlayer` 只看 `media_player` 的这些字段。1.6.8 已按官方 `braviatv` 对齐：
 
-本集成对齐同一条路：`media_player` 与 braviatv 相同；`remote` 只给 HA 自动化用，**不会**单独进 HomeKit。点设备上的 **按索尼方式接入 HomeKit**：把播放器加进**已有的那座 HomeKit 桥**（和索尼同一座），再按 HA 官方机制拆出配件模式。删掉以前多出来的「TCL 遥控器」配件。
+- 类属性：`_attr_name = None`、`_attr_assumed_state = True`、`device_class=tv`
+- `supported_features`：与 BraviaTVMediaPlayer **同一组 Feature 枚举**（155581）
+- 状态只有 ON / OFF；`source` / `source_list` / `volume_level` / `is_volume_muted` 都是 `@property`
+- 补齐 braviatv 那组 `media_title` / `media_channel` / `media_content_*` / `media_duration` / `media_position`
+- `DeviceInfo`：只设 manufacturer，**不设 model**（HomeKit Model 回落为 `Media Player`）；不设 name（用配置条目标题）
+- `remote`：只有 `_attr_name = None`，无 ACTIVITY、无 icon / assumed_state
+- 去掉 media_player 的 `icon` 和 `power_sensor` extra attributes（braviatv 没有这些）
+
+仍无法与索尼一模一样、且 HomeKit **不会用来建 Television** 的部分：红外没有网卡 MAC（braviatv 有 `connections`）、manufacturer 是 `IR Television` 而不是 `Sony`、没有真实播放进度。
 
 Apple 显示遥控器仍需要：
 
@@ -350,7 +355,8 @@ custom_components/ir_television/
   flow_schemas.py
   media_player.py
   remote.py           # same device, no ACTIVITY, not a HomeKit accessory
-  homekit_expose.py   # add media_player to existing HomeKit Bridge, then accessory-mode split
+  entity.py           # Bravia-style DeviceInfo (manufacturer only, no model)
+  homekit_expose.py   # optional pairing helper
   button.py
   diagnostics.py
   icons.json

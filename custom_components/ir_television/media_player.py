@@ -21,7 +21,6 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -45,7 +44,6 @@ from .const import (
     CONF_SOURCES,
     DOMAIN,
     EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED,
-    HOMEKIT_TV_FEATURES,
     INTENT_PAUSE,
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
@@ -58,9 +56,8 @@ from .const import (
     INTENT_VOLUME_UP,
     INTENT_NEXT,
     INTENT_PREVIOUS,
-    MANUFACTURER,
-    MODEL,
 )
+from .entity import IRTelevisionEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,26 +73,38 @@ async def async_setup_entry(
     async_add_entities([IRTelevisionMediaPlayer(hass, entry)])
 
 
-class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
-    """TV controlled by IR or button entities, with optional binary_sensor power."""
+class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEntity):
+    """Same HomeKit surface as official BraviaTVMediaPlayer; IR underneath."""
 
-    _attr_device_class = MediaPlayerDeviceClass.TV
-    _attr_icon = "mdi:television"
-    _attr_has_entity_name = True
+    # Attribute set copied from braviatv/media_player.py BraviaTVMediaPlayer.
     _attr_name = None
-    _attr_should_poll = False
-    _attr_available = True
     _attr_assumed_state = True
-    _attr_supported_features = MediaPlayerEntityFeature(HOMEKIT_TV_FEATURES)
+    _attr_device_class = MediaPlayerDeviceClass.TV
+    _attr_supported_features = (
+        MediaPlayerEntityFeature.PAUSE
+        | MediaPlayerEntityFeature.VOLUME_STEP
+        | MediaPlayerEntityFeature.VOLUME_MUTE
+        | MediaPlayerEntityFeature.VOLUME_SET
+        | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.NEXT_TRACK
+        | MediaPlayerEntityFeature.TURN_ON
+        | MediaPlayerEntityFeature.TURN_OFF
+        | MediaPlayerEntityFeature.SELECT_SOURCE
+        | MediaPlayerEntityFeature.PLAY
+        | MediaPlayerEntityFeature.STOP
+        | MediaPlayerEntityFeature.PLAY_MEDIA
+        | MediaPlayerEntityFeature.BROWSE_MEDIA
+    )
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self.hass = hass
-        self._entry = entry
+        super().__init__(hass, entry)
         self._attr_unique_id = f"{entry.entry_id}_tv"
         self._is_on = False
         self._muted = False
         self._volume = 0.5
         self._source: str | None = None
+        self._media_title: str | None = None
+        self._media_content_type: MediaType | None = None
 
     def _commands(self) -> dict[str, Any]:
         return dict(self._entry.data.get(CONF_COMMANDS) or {})
@@ -115,67 +124,80 @@ class IRTelevisionMediaPlayer(MediaPlayerEntity, RestoreEntity):
         return bool(self._entry.data.get(CONF_POWER_SENSOR_INVERT))
 
     @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name=self._entry.data.get(CONF_NAME) or self._entry.title,
-            manufacturer=MANUFACTURER,
-            model=MODEL,
-        )
-
-    @property
     def state(self) -> MediaPlayerState:
-        """ON or OFF only — same as official BraviaTVMediaPlayer."""
+        """Return the state of the device."""
         if self._is_on:
             return MediaPlayerState.ON
         return MediaPlayerState.OFF
 
     @property
     def source(self) -> str | None:
-        """Current input — same attribute BraviaTVMediaPlayer exposes.
-
-        Always a member of source_list so the HA more-info card and HomeKit
-        CHAR_ACTIVE_IDENTIFIER both show a selection. IR cannot read the real
-        HDMI; this is the last selected (or first) source.
-        """
+        """Return the current input source."""
         return current_source_name(self._source, self._sources())
 
     @property
     def source_list(self) -> list[str]:
-        """Available inputs, same as coordinator.source_list on braviatv."""
+        """List of available input sources."""
         return build_source_list(self._sources())
 
     @property
     def volume_level(self) -> float | None:
+        """Volume level of the media player (0..1)."""
         return self._volume
 
     @property
     def is_volume_muted(self) -> bool:
+        """Boolean if volume is currently muted."""
         return self._muted
 
     @property
     def media_title(self) -> str | None:
-        """Sony uses playing title; IR uses the active input name."""
-        return self.source
+        """Title of current playing media."""
+        return self._media_title
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        sensor = self._power_sensor
-        if not sensor:
-            return None
-        attrs: dict[str, Any] = {"power_sensor": sensor}
-        if self._power_sensor_invert:
-            attrs["power_sensor_invert"] = True
-        return attrs
+    def media_channel(self) -> str | None:
+        """Channel currently playing."""
+        return None
+
+    @property
+    def media_content_id(self) -> str | None:
+        """Content ID of current playing media."""
+        return None
+
+    @property
+    def media_content_type(self) -> MediaType | None:
+        """Content type of current playing media."""
+        return self._media_content_type
+
+    @property
+    def media_duration(self) -> int | None:
+        """Duration of current playing media in seconds."""
+        return None
+
+    @property
+    def media_position(self) -> int | None:
+        """Position of current playing media in seconds."""
+        return None
+
+    @property
+    def media_position_updated_at(self):
+        """When was the position of the current playing media valid."""
+        return None
 
     def _apply_power(self, is_on: bool) -> None:
         self._is_on = is_on
+        if is_on:
+            self._media_title = current_source_name(self._source, self._sources())
+        else:
+            self._media_title = None
+            self._media_content_type = None
 
     def _mark_on_from_command(self) -> None:
         """Optimistic on only when there is no power sensor to contradict us."""
         if self._power_sensor:
             return
-        self._is_on = True
+        self._apply_power(True)
 
     def _sync_from_power_sensor(self) -> bool:
         """Apply current binary_sensor state. Returns True if a clear reading was used."""

@@ -14,10 +14,6 @@ DEFAULT_SOURCE_NAME = "TV"
 EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED = "homekit_tv_remote_key_pressed"
 
 MANUFACTURER = "IR Television"
-# HomeKit CHAR_MODEL (0x21). Official braviatv leaves DeviceInfo.model empty so
-# HA HomeKit falls back to domain.title() == "Media Player". Override with the
-# same string so inspectors match Sony.
-MODEL = "Media Player"
 
 CONF_NAME = "name"
 CONF_COMMANDS = "commands"

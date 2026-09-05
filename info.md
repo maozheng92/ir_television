@@ -4,8 +4,8 @@
 
 - 图形化配置（Config Flow / Options Flow）
 - 每条指令可映射 **Broadlink 红外**（`remote.send_command`）或 **按钮**（`button.press`）
-- 功能位与官方 **Sony Bravia** 电视一致（`supported_features: 155581`），HomeKit 才会建成 Television 配件
-- **电视与遥控器是同一设备**：HomeKit 只暴露 `media_player`，不会单独创建 remote 配件（对齐 braviatv）
+- `media_player` 属性集与官方 **braviatv** 对齐（`device_class=tv`、功能位 155581、ON/OFF、`source`/`source_list`、同一组 `media_*`）
+- **电视与遥控器是同一设备**：HomeKit 只暴露 `media_player`；`DeviceInfo` 不写 model（HomeKit Model = Media Player）
 - 监听 `homekit_tv_remote_key_pressed`，方向键可发红外
 - 可选 `binary_sensor` 作为电源状态回读
 
