@@ -59,7 +59,7 @@ class IRTelevisionKeyButton(IRTelevisionEntity, ButtonEntity):
 
 
 class IRTelevisionRecreateHomeKitButton(IRTelevisionEntity, ButtonEntity):
-    """Optional pairing helper — not part of the braviatv entity set."""
+    """Explain hub / Remote-list mismatch; do not rotate pairing identity."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC
