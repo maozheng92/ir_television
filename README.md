@@ -103,16 +103,16 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 `media_player.tcl` 对齐索尼：`device_class: tv`、`source_list`、`state` 只有 on/off、`supported_features: 155581`、`assumed_state: true`。
 
-**重新配对 / `homekit.reset_accessory` 之后 Widget 仍没有时**
+**家庭 App 是电视图标，遥控器切换列表只有 SONY + Apple TV 时**
 
-这两步已经排除「配件不完整」和「旧配对 MAC」。不要再重复重置。先分清是哪一种：
+HAP 已经成功，**不要再重配、不要再 `reset_accessory`、不要再换新二维码。** 换身份会让 Apple TV **家庭中枢** pair verify 失败：iPhone 家庭 App 仍显示电视，控制中心遥控器却不收录。
 
-1. 家庭 App 里这台是**电视图标**，能开关、能切 HDMI → HAP 已成功。  
-2. 打开控制中心遥控器（默认常是索尼）→ **点最上方设备名**，看切换列表。  
-   - 列表里有 TCL / 电视 2 / 你起的名字：选它即可，不是没出现。  
-   - 列表里只有索尼 / Apple TV：**先在家庭 App 把这台电视打开**（HA 里 `media_player` 必须是 `on`，HomeKit `Active=1`）。1.6.9 起无电源传感器时默认开机，避免每次重启都是 `off`。  
-   - 打开后仍没有：重启 iPhone（控制中心列表不随重配自动刷新），再看切换列表里的**全部名字**。  
-3. 确认配件加在**和索尼同一个家庭**，不是第二个「住宅」。
+控制中心遥控器的 HomeKit 电视由 **Apple TV 中枢**收录，不是家庭 App。列表里的两台 Apple TV 就是中枢。
+
+1. 对比遥控器里的 **SONY** 和家庭 App 索尼配件的**全名**（如 BRAVIA KD-55X9000B）。对不上，则 Widget 里的 SONY 可能不是 HA braviatv。  
+2. 决定性试验：暂时删除/关闭家庭里 **HA 的索尼电视配件**。若 Widget 仍没有红外电视，SONY 本来就不是这条 HA HomeKit 路径。  
+3. 中枢必须能连上红外电视那条 **配件模式 HomeKit 的 TCP 端口**（和索尼配件端口不同）。HA 日志若刷 `pair verify without being paired first`，就是中枢还握着旧配对。  
+4. 只保留**一条**稳定配件：家庭 App 删除红外电视 → 等两台 Apple TV 中枢显示已连接 → 用**现有**二维码加回一次 → 等几分钟。
 
 **已经配对过但仍没有 iOS Remote Widget 时**
 

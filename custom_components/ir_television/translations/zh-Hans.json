@@ -361,7 +361,7 @@
       "home": { "name": "主页" },
       "menu": { "name": "菜单" },
       "info": { "name": "信息" },
-      "recreate_homekit": { "name": "按索尼方式接入 HomeKit" }
+      "recreate_homekit": { "name": "HomeKit 中枢说明" }
     }
   }
 }
