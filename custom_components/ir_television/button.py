@@ -59,7 +59,7 @@ class IRTelevisionKeyButton(IRTelevisionEntity, ButtonEntity):
 
 
 class IRTelevisionRecreateHomeKitButton(IRTelevisionEntity, ButtonEntity):
-    """Explain hub / Remote-list mismatch; do not rotate pairing identity."""
+    """Put this TV on Sony's HomeKit Bridge; do not rotate pairing identity."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC

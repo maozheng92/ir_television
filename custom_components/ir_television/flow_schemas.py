@@ -37,7 +37,9 @@ from .const import (
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
+    CONF_MANUFACTURER,
     CONF_NAME,
+    DEFAULT_HOMEKIT_MANUFACTURER,
     CONF_NUM_REPEATS,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
@@ -128,11 +130,18 @@ def _name_dropdown(names: list[str], *, current: str = "") -> SelectSelector:
     )
 
 
-def name_schema(default: str | None = None) -> vol.Schema:
-    """TV display name."""
+def name_schema(
+    default: str | None = None,
+    manufacturer: str | None = None,
+) -> vol.Schema:
+    """TV display name plus HomeKit Accessory Information manufacturer."""
     return vol.Schema(
         {
             vol.Required(CONF_NAME, default=default or ""): _text(),
+            vol.Required(
+                CONF_MANUFACTURER,
+                default=manufacturer or DEFAULT_HOMEKIT_MANUFACTURER,
+            ): _text(),
         }
     )
 

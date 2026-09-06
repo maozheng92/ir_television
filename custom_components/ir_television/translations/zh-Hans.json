@@ -4,9 +4,13 @@
     "step": {
       "user": {
         "title": "添加红外电视",
-        "description": "先给这台电视起个名字。接下来会映射电源、音量、播放和输入源。每条指令都可以是 Broadlink 红外（`remote.send_command`）或 Home Assistant 按钮（`button.press`）。",
+        "description": "先给这台电视起个名字。HomeKit 制造商默认是 **Sony**：控制中心遥控器把官方 braviatv 配件显示成 **SONY**，用的就是这个字段。接下来会映射电源、音量、播放和输入源。每条指令都可以是 Broadlink 红外（`remote.send_command`）或 Home Assistant 按钮（`button.press`）。",
         "data": {
-          "name": "电视名称"
+          "name": "电视名称",
+          "manufacturer": "HomeKit 制造商"
+        },
+        "data_description": {
+          "manufacturer": "写入 HomeKit 配件信息。能进控制中心列表的 HA 索尼配件用的是 Sony。除非你确认 iOS 会收录其它品牌，否则不要改。"
         }
       },
       "defaults": {
@@ -135,7 +139,7 @@
         "title": "配置红外电视",
         "description": "**{name}** — {command_count} 条指令，{source_count} 个输入源。电源传感器：{power_sensor}。修改会暂存在向导中，选择“保存并重新加载”后生效。",
         "menu_options": {
-          "name": "重命名",
+          "name": "名称与 HomeKit 制造商",
           "defaults": "默认 Broadlink 遥控器",
           "power": "电源",
           "power_sensor": "电源状态传感器",
@@ -148,9 +152,13 @@
         }
       },
       "name": {
-        "title": "重命名",
+        "title": "名称与 HomeKit 制造商",
         "data": {
-          "name": "电视名称"
+          "name": "电视名称",
+          "manufacturer": "HomeKit 制造商"
+        },
+        "data_description": {
+          "manufacturer": "请与控制中心已能列出的品牌一致（Sony）。未确认前不要改成其它名字。"
         }
       },
       "defaults": {
@@ -361,7 +369,7 @@
       "home": { "name": "主页" },
       "menu": { "name": "菜单" },
       "info": { "name": "信息" },
-      "recreate_homekit": { "name": "HomeKit 中枢说明" }
+      "recreate_homekit": { "name": "对齐索尼 HomeKit 桥" }
     }
   }
 }

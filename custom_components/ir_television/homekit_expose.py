@@ -1,11 +1,13 @@
-"""HomeKit helper — do not rotate pairing identity.
+"""HomeKit helper — keep pairing, align this TV with the working Bravia accessory.
 
-Control Center Remote enumerates TVs the **home hub** (Apple TV) can HAP-talk
-to. Deleting the accessory-mode entry and issuing a new QR breaks hub pairing
-(``pair verify without being paired first``) while the iPhone Home app still
-shows a TV tile. That matches: Home = TV icon, Remote list = SONY + Apple TVs.
+Control Center Remote *does* list the official braviatv HomeKit Television
+(shown as **SONY**). This IR TV is already a Home Television; iOS omits it
+from that picker. The remaining deltas we can still change are:
 
-Do not import this module from ``actions.py``.
+* HAP Manufacturer (braviatv = ``Sony``; the widget label is that field)
+* Living on the **same HomeKit Bridge** the hub already talks to
+
+Do not rotate pairing identity. Do not import this module from ``actions.py``.
 """
 
 from __future__ import annotations
@@ -18,9 +20,17 @@ from .actions import (
     build_bridge_filter_including,
     homekit_accessory_entries_for_entity,
     homekit_filter_dict,
+    merge_homekit_entity_config,
     pick_homekit_bridge_entry_id,
+    resolve_manufacturer,
 )
-from .const import HOMEKIT_DOMAIN, HOMEKIT_FILTER, HOMEKIT_INCLUDE_ENTITIES
+from .const import (
+    DEFAULT_HOMEKIT_MANUFACTURER,
+    DOMAIN,
+    HOMEKIT_DOMAIN,
+    HOMEKIT_FILTER,
+    HOMEKIT_INCLUDE_ENTITIES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,10 +44,20 @@ def _homekit_triples(hass: HomeAssistant) -> list[tuple[dict, dict, str]]:
     return triples
 
 
+def _manufacturer_for_tv(hass: HomeAssistant, tv_id: str) -> str:
+    for entry_id, runtime in (hass.data.get(DOMAIN) or {}).items():
+        if not isinstance(runtime, dict) or runtime.get("tv_entity_id") != tv_id:
+            continue
+        entry = hass.config_entries.async_get_entry(str(entry_id))
+        if entry is not None:
+            return resolve_manufacturer(dict(entry.data))
+    return DEFAULT_HOMEKIT_MANUFACTURER
+
+
 async def async_recreate_homekit_tv_accessory(
     hass: HomeAssistant, entity_ids: list[str]
 ) -> None:
-    """Keep the existing accessory pairing; explain why Remote may omit this TV."""
+    """Add this TV to Sony's bridge and refresh Accessory Information."""
     tv_id = next((eid for eid in entity_ids if eid.startswith("media_player.")), None)
     if tv_id is None or hass.states.get(tv_id) is None:
         await _async_notify(
@@ -48,7 +68,10 @@ async def async_recreate_homekit_tv_accessory(
 
     triples = _homekit_triples(hass)
     bridge_id = pick_homekit_bridge_entry_id(triples)
-    bridge_note = await _async_include_on_bridge(hass, tv_id, bridge_id)
+    manufacturer = _manufacturer_for_tv(hass, tv_id)
+    bridge_note = await _async_include_on_bridge(
+        hass, tv_id, bridge_id, manufacturer=manufacturer
+    )
     acc_ids = homekit_accessory_entries_for_entity(triples, tv_id)
 
     ports: list[str] = []
@@ -57,41 +80,38 @@ async def async_recreate_homekit_tv_accessory(
             continue
         blob = {**dict(entry.data), **dict(entry.options)}
         port = blob.get("port")
-        title = entry.title
-        ports.append(f"`{title}` 端口 {port}")
+        ports.append(f"`{entry.title}` 端口 {port}")
 
-    port_note = "、".join(ports) if ports else "没有找到这条电视的配件模式 HomeKit 条目"
+    reset_note = await _async_reset_accessory(hass, tv_id)
+    port_note = "、".join(ports) if ports else "未找到这条电视自己的配件模式条目（桥接拆出的配件也没问题）"
     await _async_notify(
         hass,
         (
+            "控制中心列表里的 **SONY** 就是 HA 官方 braviatv 的 HomeKit 电视。"
+            "HA Television **可以**进这个列表；红外电视被单独滤掉了。\n\n"
             f"{bridge_note}\n"
-            f"配件条目：{port_note}。**没有**删除或换新二维码"
-            "（换身份会让 Apple TV 中枢 pair verify 失败，家庭 App 仍显示电视，"
-            "遥控器列表却只有索尼和 Apple TV）。\n\n"
-            "家庭 App 已是电视图标、遥控器切换列表只有 SONY + Apple TV 时：\n"
-            "1. 对比遥控器里的 **SONY** 和家庭 App 里索尼配件的**全名**"
-            "（例如 BRAVIA KD-55X9000B）。全名不同，说明 Widget 里的 SONY"
-            "可能不是 HA braviatv 那条配件。\n"
-            "2. 控制中心遥控器的 HomeKit 电视由 **Apple TV 家庭中枢**收录，"
-            "不是 iPhone 家庭 App。中枢必须能连上上面的 **配件端口**"
-            "（和索尼配件不是同一个端口）。看 HA 日志是否还有 "
-            "`pair verify without being paired first`。\n"
-            "3. **不要再点重建/重配。** 家庭 App 里删掉红外电视后，等两台"
-            "Apple TV 都同步（家庭设置 → 家庭中枢为已连接），再用**同一条**"
-            "已有配件的二维码加回一次，等几分钟让中枢学会这台电视。\n"
-            "4. 决定性试验：暂时关掉/删除家庭里 **HA 的索尼电视配件**"
-            "（不是拆电视电源）。若此时 Widget 仍没有红外电视，"
-            "则 Widget 里的 SONY 本来就不是 HA HomeKit 电视。"
+            f"配件条目：{port_note}。\n"
+            f"{reset_note}\n\n"
+            f"已把 HomeKit 制造商写成 **{manufacturer}**"
+            "（和 braviatv 一样；遥控器上那台显示成 SONY）。"
+            "**没有**删除配对、也没有换新二维码。\n\n"
+            "请等一两分钟让 Apple TV 家庭中枢同步，再打开控制中心遥控器，"
+            "**点顶部设备名**。列表里可能出现第二台 SONY，或仍显示 TCL。\n"
+            "不要再删家庭 App 配件、不要再扫新码。"
         ),
     )
 
 
 async def _async_include_on_bridge(
-    hass: HomeAssistant, tv_id: str, bridge_id: str | None
+    hass: HomeAssistant,
+    tv_id: str,
+    bridge_id: str | None,
+    *,
+    manufacturer: str,
 ) -> str:
-    """Add the TV to an existing HomeKit Bridge filter (Sony's include list)."""
+    """Add the TV to Sony's HomeKit Bridge and set entity_config manufacturer."""
     if not bridge_id:
-        return "没有找到现有 HomeKit 桥接。"
+        return "没有找到现有 HomeKit 桥接。请先添加与索尼同一座桥。"
 
     entry = hass.config_entries.async_get_entry(bridge_id)
     if entry is None:
@@ -101,11 +121,35 @@ async def _async_include_on_bridge(
     filt = homekit_filter_dict(dict(entry.data), options)
     already = tv_id in [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
     options[HOMEKIT_FILTER] = build_bridge_filter_including(filt, tv_id)
+    options = merge_homekit_entity_config(
+        options, tv_id, manufacturer=manufacturer
+    )
     hass.config_entries.async_update_entry(entry, options=options)
+    try:
+        await hass.config_entries.async_reload(entry.entry_id)
+    except Exception:  # noqa: BLE001 — never fail the helper on HomeKit reload
+        _LOGGER.exception("Failed to reload HomeKit bridge %s", entry.entry_id)
     title = entry.title or bridge_id
     if already:
-        return f"`{tv_id}` 已在桥 **{title}** 的包含列表里。"
-    return f"已把 `{tv_id}` 留在桥 **{title}** 的包含列表里。"
+        return f"`{tv_id}` 已在桥 **{title}** 的包含列表里，并写入了制造商。"
+    return f"已把 `{tv_id}` 加进桥 **{title}** 的包含列表（索尼同一座桥）。"
+
+
+async def _async_reset_accessory(hass: HomeAssistant, tv_id: str) -> str:
+    """Refresh HAP Accessory Information without rotating the pairing identity."""
+    if not hass.services.has_service(HOMEKIT_DOMAIN, "reset_accessory"):
+        return "当前 HA 没有 `homekit.reset_accessory` 服务。"
+    try:
+        await hass.services.async_call(
+            HOMEKIT_DOMAIN,
+            "reset_accessory",
+            {"entity_id": tv_id},
+            blocking=False,
+        )
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception("homekit.reset_accessory failed for %s", tv_id)
+        return f"`homekit.reset_accessory` 调用失败（`{tv_id}`）。"
+    return f"已对 `{tv_id}` 调用 `homekit.reset_accessory`（只刷新配件信息）。"
 
 
 async def _async_notify(hass: HomeAssistant, message: str) -> None:
@@ -113,7 +157,7 @@ async def _async_notify(hass: HomeAssistant, message: str) -> None:
         "persistent_notification",
         "create",
         {
-            "title": "红外电视：遥控器列表与家庭中枢",
+            "title": "红外电视：对齐索尼 HomeKit 桥",
             "message": message,
             "notification_id": _NOTIFY_ID,
         },

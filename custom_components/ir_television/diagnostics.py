@@ -14,6 +14,7 @@ from .actions import (
     describe_homekit_entries,
     homekit_accessory_entries_for_entity,
     pick_homekit_bridge_entry_id,
+    resolve_manufacturer,
 )
 from .const import CONF_COMMANDS, CONF_POWER_SENSOR, CONF_SOURCES, DOMAIN, HOMEKIT_DOMAIN
 
@@ -47,6 +48,7 @@ async def async_get_config_entry_diagnostics(
         "supported_features": compute_supported_features(commands, sources),
         "command_keys": sorted(commands.keys()),
         "power_sensor": entry.data.get(CONF_POWER_SENSOR),
+        "homekit_manufacturer": resolve_manufacturer(dict(entry.data)),
         "source_names": [
             src.get("name") for src in sources if isinstance(src, dict)
         ],

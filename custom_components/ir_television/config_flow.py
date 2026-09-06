@@ -31,11 +31,13 @@ from .const import (
     CONF_COMMANDS,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
+    CONF_MANUFACTURER,
     CONF_NAME,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
     CONF_SOURCE_NAME,
     CONF_SOURCES,
+    DEFAULT_HOMEKIT_MANUFACTURER,
     DOMAIN,
     NAV_COMMANDS,
     PLAYBACK_COMMANDS,
@@ -84,6 +86,7 @@ class TelevisionFlowMixin:
             CONF_DEFAULT_DEVICE: None,
             CONF_POWER_SENSOR: None,
             CONF_POWER_SENSOR_INVERT: False,
+            CONF_MANUFACTURER: DEFAULT_HOMEKIT_MANUFACTURER,
         }
         if CONF_COMMANDS not in self._data or self._data[CONF_COMMANDS] is None:
             self._data[CONF_COMMANDS] = {}
@@ -91,6 +94,7 @@ class TelevisionFlowMixin:
             self._data[CONF_SOURCES] = []
         self._data.setdefault(CONF_POWER_SENSOR, None)
         self._data.setdefault(CONF_POWER_SENSOR_INVERT, False)
+        self._data.setdefault(CONF_MANUFACTURER, DEFAULT_HOMEKIT_MANUFACTURER)
         self._queue = []
         self._after_queue = "volume_select"
         self._source_draft = {}
@@ -582,15 +586,23 @@ class IRTelevisionConfigFlow(ConfigFlow, TelevisionFlowMixin, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = normalize_source_name(user_input.get(CONF_NAME))
+            manufacturer = (
+                normalize_source_name(user_input.get(CONF_MANUFACTURER))
+                or DEFAULT_HOMEKIT_MANUFACTURER
+            )
             if not name:
                 errors["base"] = "empty_name"
             else:
                 self._data[CONF_NAME] = name
+                self._data[CONF_MANUFACTURER] = manufacturer
                 return await self.async_step_defaults()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=name_schema(self._data.get(CONF_NAME)),
+            data_schema=name_schema(
+                self._data.get(CONF_NAME),
+                self._data.get(CONF_MANUFACTURER),
+            ),
             errors=errors,
         )
 
@@ -661,14 +673,22 @@ class IRTelevisionOptionsFlow(OptionsFlow, TelevisionFlowMixin):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = normalize_source_name(user_input.get(CONF_NAME))
+            manufacturer = (
+                normalize_source_name(user_input.get(CONF_MANUFACTURER))
+                or DEFAULT_HOMEKIT_MANUFACTURER
+            )
             if not name:
                 errors["base"] = "empty_name"
             else:
                 self._data[CONF_NAME] = name
+                self._data[CONF_MANUFACTURER] = manufacturer
                 return await self.async_step_init()
         return self.async_show_form(
             step_id="name",
-            data_schema=name_schema(self._data.get(CONF_NAME)),
+            data_schema=name_schema(
+                self._data.get(CONF_NAME),
+                self._data.get(CONF_MANUFACTURER),
+            ),
             errors=errors,
         )
 
