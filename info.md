@@ -1,6 +1,6 @@
 # 红外电视 / IR Television
 
-把普通红外电视变成 Home Assistant 的 **Television Media Player**（`device_class=tv`），供 **iOS 控制中心「隔空播放遥控器 / Apple TV Remote」**（HomeKit）使用。
+把普通红外电视变成 Home Assistant 的 **Television Media Player**（`device_class=tv`），经 HomeKit 桥接出现在「家庭」App。控制中心遥控器的设备列表由 iOS / 中枢收录；若列表里的 SONY 不是 HA 配件，本集成无法把红外电视写进那个列表。
 
 - 图形化配置（Config Flow / Options Flow）
 - 每条指令可映射 **Broadlink 红外**（`remote.send_command`）或 **按钮**（`button.press`）
@@ -11,4 +11,4 @@
 
 安装：把 `custom_components/ir_television/` **整个文件夹**复制到 Home Assistant 配置目录（必须包含 `translations/en.json`，不能是空文件），**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。若向导报 `en.json` 空文档，删掉该目录后重新完整拷贝。
 
-索尼没有 AirPlay / 原厂 HomeKit：官方路径是 **Bravia 集成 → HomeKit 桥接 → HA 为电视拆出配件**。点设备上的 **按索尼方式接入 HomeKit**，把 `media_player` 加进**同一座桥**并拆出配件（不会删主桥）。家庭 App 扫配件码，不要扫主桥。
+家庭 App 扫配件模式二维码（不要扫主桥）。不要为进控制中心列表而反复重建配对。若遥控器里只有 SONY + Apple TV，且去掉 HA 索尼配件后红外电视仍不出现，那是 iOS 设备池，不是本集成还能改的实体字段。

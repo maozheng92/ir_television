@@ -1,10 +1,12 @@
 # IR Television / 红外电视
 
-Home Assistant 自定义集成：把普通红外电视变成 **Television Media Player**（`device_class=tv`），供 **iOS 控制中心的「隔空播放遥控器 / Apple TV Remote」**（Apple HomeKit）使用。这不是 Home Assistant Companion 的主屏幕小组件。
+Home Assistant 自定义集成：把普通红外电视变成 **Television Media Player**（`device_class=tv`），经官方 **HomeKit 桥接** 出现在「家庭」App 里（电视图标、开关、HDMI、方向键事件）。
+
+**控制中心「隔空播放遥控器」的设备列表由 iOS / Apple TV 中枢收录，不是家庭 App。** 在本机实测：列表只有 SONY + Apple TV；删掉 HA 的索尼 HomeKit 配件后红外电视仍不出现。说明列表里的 SONY **不是** HA braviatv 配件，再对齐实体也无法让红外电视进这个列表。
 
 每条按键或输入源可以走 **Broadlink 红外**（`remote.send_command`）或任意 **按钮实体**（`button.press`）。图形化 Config Flow / Options Flow，无需 YAML。
 
-A Home Assistant custom integration that exposes a dumb IR television as a **Television Media Player** (`device_class=tv`) so the **Apple Control Center Remote** (HomeKit `TelevisionMediaPlayer`) can control it. This is **not** the Home Assistant Companion home-screen widget.
+A Home Assistant custom integration that exposes a dumb IR television as a **Television Media Player** (`device_class=tv`) in the Apple **Home** app via HomeKit Bridge. The Control Center Remote device list is owned by iOS / the home hub; on a setup where that list is SONY + Apple TVs and removing the HA Bravia accessory does not add this TV, HomeKit entity parity cannot put it in that list.
 
 Each key or input source is either **Broadlink IR** (`remote.send_command`) or a **button entity** (`button.press`). Setup is a graphical wizard — no YAML required.
 
@@ -22,13 +24,18 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 - **`remote` 与电视是同一设备上的第二个实体**（`_attr_name = None`，无 ACTIVITY），只给 HA 自动化发红外用。**不会**单独创建 HomeKit 配件——和官方 braviatv 一样，iOS 遥控器只认 `media_player`
 - 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到 `media_player`
 
-### 为什么索尼可以显示、红外电视以前不行
+### 控制中心遥控器为什么有 SONY、没有红外电视
 
-这是 **系统控制中心 → 隔空播放遥控器 / Apple TV Remote**，不是 Companion 主屏幕小组件。
+已用试验排除「实体不像 braviatv」和「没进家庭 App」：
 
-两条路的 HomeKit 段**完全相同**：集成的 `media_player` → HomeKit 桥接（包含 `media_player`）→ HA 拆出配件模式电视 → 家庭 App 扫配件码。索尼没有 AirPlay / 原厂 HomeKit。
+1. 遥控器里的 **SONY** 与家庭 App 里 HA 索尼配件全名（如 BRAVIA KD-55X9000B）**不是同一条**。
+2. 删掉 / 关掉家庭里 **HA 的索尼电视配件** 之后，红外电视**仍然不出现**。
 
-差别只在**两个集成的实体**。HomeKit 的 `TelevisionMediaPlayer` 只看 `media_player` 的这些字段。1.6.8 已按官方 `braviatv` 对齐：
+因此：控制中心那台 SONY **不是**「braviatv → HomeKit 桥接」建出来的配件。两条集成的 HomeKit 路径可以完全一样，Widget 设备池也不会收 HA 虚拟电视。再改 `supported_features`、Model、重配、`reset_accessory` 都无效。
+
+家庭 App 里的电视配件仍然有用（开关、HDMI、`homekit_tv_remote_key_pressed`）。不要再为 Widget 列表重建 HomeKit 身份。
+
+本集成的 `media_player` 仍按官方 `braviatv` 对齐，供家庭 App / HomeKit 使用：
 
 - 类属性：`_attr_name = None`、`_attr_assumed_state = True`、`device_class=tv`
 - `supported_features`：与 BraviaTVMediaPlayer **同一组 Feature 枚举**（155581）
