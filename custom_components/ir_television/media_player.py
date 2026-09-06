@@ -99,7 +99,10 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, entry)
         self._attr_unique_id = f"{entry.entry_id}_tv"
-        self._is_on = False
+        # No power sensor: stay ON so HomeKit CHAR_ACTIVE=1 (braviatv is
+        # usually on when the Remote widget is opened). Assumed OFF after
+        # every restart is a real difference from Sony.
+        self._is_on = True
         self._muted = False
         self._volume = 0.5
         self._source: str | None = None
@@ -230,11 +233,6 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last is not None:
-            state = last.state
-            if state in _OFF_STATES:
-                self._is_on = False
-            else:
-                self._is_on = True
             attrs = last.attributes or {}
             if "is_volume_muted" in attrs:
                 self._muted = bool(attrs.get("is_volume_muted"))
@@ -245,11 +243,20 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
                     pass
             if attrs.get("source"):
                 self._source = str(attrs["source"])
+            if self._power_sensor:
+                if last.state in _OFF_STATES:
+                    self._is_on = False
+                else:
+                    self._is_on = True
 
         if not self._source:
             names = build_source_list(self._sources())
             if names:
                 self._source = names[0]
+
+        # No sensor: keep Active=1 after restart / re-pair (Sony is usually on).
+        if not self._power_sensor:
+            self._apply_power(True)
 
         runtime = self.hass.data.setdefault(DOMAIN, {}).setdefault(
             self._entry.entry_id, {}

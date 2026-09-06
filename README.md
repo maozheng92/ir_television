@@ -103,6 +103,17 @@ HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / 
 
 `media_player.tcl` 对齐索尼：`device_class: tv`、`source_list`、`state` 只有 on/off、`supported_features: 155581`、`assumed_state: true`。
 
+**重新配对 / `homekit.reset_accessory` 之后 Widget 仍没有时**
+
+这两步已经排除「配件不完整」和「旧配对 MAC」。不要再重复重置。先分清是哪一种：
+
+1. 家庭 App 里这台是**电视图标**，能开关、能切 HDMI → HAP 已成功。  
+2. 打开控制中心遥控器（默认常是索尼）→ **点最上方设备名**，看切换列表。  
+   - 列表里有 TCL / 电视 2 / 你起的名字：选它即可，不是没出现。  
+   - 列表里只有索尼 / Apple TV：**先在家庭 App 把这台电视打开**（HA 里 `media_player` 必须是 `on`，HomeKit `Active=1`）。1.6.9 起无电源传感器时默认开机，避免每次重启都是 `off`。  
+   - 打开后仍没有：重启 iPhone（控制中心列表不随重配自动刷新），再看切换列表里的**全部名字**。  
+3. 确认配件加在**和索尼同一个家庭**，不是第二个「住宅」。
+
 **已经配对过但仍没有 iOS Remote Widget 时**
 
 先看 `.storage` 里 `homekit.*.iids`。若 aid `1` 上已有：
