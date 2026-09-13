@@ -33,6 +33,7 @@ from .actions import (
     power_is_on_from_sensor,
     resolve_command_key,
     resolve_homekit_remote_key,
+    resolve_power_press_key,
 )
 from .command_sender import async_send_action
 from .const import (
@@ -48,9 +49,6 @@ from .const import (
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
     INTENT_STOP,
-    INTENT_TOGGLE,
-    INTENT_TURN_OFF,
-    INTENT_TURN_ON,
     INTENT_VOLUME_DOWN,
     INTENT_VOLUME_MUTE,
     INTENT_VOLUME_UP,
@@ -199,6 +197,11 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
             return
         self._apply_power(True)
 
+    def _effective_is_on(self) -> bool:
+        """TV power used to pick on vs off. Sensor wins when it has a clear reading."""
+        self._sync_from_power_sensor()
+        return self._is_on
+
     def _sync_from_power_sensor(self) -> bool:
         """Apply current binary_sensor state. Returns True if a clear reading was used."""
         sensor = self._power_sensor
@@ -285,28 +288,34 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
             return False
         return await async_send_action(self.hass, commands.get(key), intent)
 
-    async def async_turn_on(self) -> None:
-        await self._async_fire(INTENT_TURN_ON)
-        self._apply_power(True)
+    async def _async_power_button(self, *, want_on: bool | None = None) -> None:
+        """One power control: pick on or off from current TV state."""
+        is_on = self._effective_is_on()
+        if want_on is None:
+            want_on = not is_on
+        elif want_on is is_on:
+            self._apply_power(is_on)
+            self.async_write_ha_state()
+            return
+        key = resolve_power_press_key(self._commands(), is_on=is_on)
+        if key is None:
+            _LOGGER.debug(
+                "IR Television '%s': power is not mapped; HomeKit state still updates",
+                self._entry.title,
+            )
+        else:
+            await async_send_action(self.hass, self._commands().get(key), f"power:{key}")
+        self._apply_power(want_on)
         self.async_write_ha_state()
+
+    async def async_turn_on(self) -> None:
+        await self._async_power_button(want_on=True)
 
     async def async_turn_off(self) -> None:
-        await self._async_fire(INTENT_TURN_OFF)
-        self._apply_power(False)
-        self.async_write_ha_state()
+        await self._async_power_button(want_on=False)
 
     async def async_toggle(self) -> None:
-        commands = self._commands()
-        toggle_key = resolve_command_key(commands, INTENT_TOGGLE)
-        if toggle_key:
-            if await async_send_action(self.hass, commands.get(toggle_key), INTENT_TOGGLE):
-                self._apply_power(not self._is_on)
-                self.async_write_ha_state()
-            return
-        if self._is_on:
-            await self.async_turn_off()
-        else:
-            await self.async_turn_on()
+        await self._async_power_button(want_on=None)
 
     async def async_volume_up(self) -> None:
         await self._async_fire(INTENT_VOLUME_UP)
