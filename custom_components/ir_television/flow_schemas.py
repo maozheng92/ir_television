@@ -351,8 +351,13 @@ def action_schema(
     *,
     defaults: dict[str, Any],
     existing: dict[str, Any] | None = None,
+    allow_button_sequence: bool = False,
 ) -> vol.Schema:
-    """Broadlink or button mapping form."""
+    """Broadlink or button mapping form.
+
+    ``allow_button_sequence`` is only for input sources (multi-select, repeats,
+    interval). Other commands take a single button.
+    """
     existing = existing or {}
     default_type = existing.get(ATTR_TYPE)
     if default_type not in (ACTION_BROADLINK, ACTION_BUTTON):
@@ -371,6 +376,7 @@ def action_schema(
     suggested_buttons = (
         button_entity_ids(existing) if existing.get(ATTR_TYPE) == ACTION_BUTTON else []
     )
+    suggested_button = suggested_buttons[0] if suggested_buttons else None
     suggested_repeats = existing.get(ATTR_NUM_REPEATS, 1)
     suggested_button_repeats = button_repeat_default(existing)
     suggested_interval = (
@@ -431,34 +437,43 @@ def action_schema(
             mode=NumberSelectorMode.BOX,
         )
     )
-    if suggested_buttons:
-        schema[vol.Optional(CONF_BUTTON_ENTITY, default=suggested_buttons)] = (
-            entity_multi_dropdown(hass, "button", current=suggested_buttons)
+    if allow_button_sequence:
+        if suggested_buttons:
+            schema[vol.Optional(CONF_BUTTON_ENTITY, default=suggested_buttons)] = (
+                entity_multi_dropdown(hass, "button", current=suggested_buttons)
+            )
+        else:
+            schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_multi_dropdown(
+                hass, "button", current=suggested_buttons
+            )
+        schema[
+            vol.Optional(CONF_BUTTON_REPEATS, default=suggested_button_repeats)
+        ] = NumberSelector(
+            NumberSelectorConfig(
+                min=1,
+                max=10,
+                step=1,
+                mode=NumberSelectorMode.BOX,
+            )
+        )
+        schema[
+            vol.Optional(CONF_INTERVAL, default=suggested_interval)
+        ] = NumberSelector(
+            NumberSelectorConfig(
+                min=0,
+                max=10,
+                step=0.1,
+                mode=NumberSelectorMode.BOX,
+            )
+        )
+    elif suggested_button:
+        schema[vol.Optional(CONF_BUTTON_ENTITY, default=suggested_button)] = (
+            entity_dropdown(hass, "button", current=suggested_button)
         )
     else:
-        schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_multi_dropdown(
-            hass, "button", current=suggested_buttons
+        schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_dropdown(
+            hass, "button", current=suggested_button
         )
-    schema[
-        vol.Optional(CONF_BUTTON_REPEATS, default=suggested_button_repeats)
-    ] = NumberSelector(
-        NumberSelectorConfig(
-            min=1,
-            max=10,
-            step=1,
-            mode=NumberSelectorMode.BOX,
-        )
-    )
-    schema[
-        vol.Optional(CONF_INTERVAL, default=suggested_interval)
-    ] = NumberSelector(
-        NumberSelectorConfig(
-            min=0,
-            max=10,
-            step=0.1,
-            mode=NumberSelectorMode.BOX,
-        )
-    )
     return vol.Schema(schema)
 
 
