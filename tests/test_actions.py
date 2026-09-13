@@ -748,6 +748,29 @@ class ManufacturerAndSourceOrderTests(unittest.TestCase):
         missing = actions.move_source(sources, "Netflix", delta=1)
         self.assertEqual([src["name"] for src in missing], ["HDMI1", "HDMI2", "HDMI3"])
 
+    def test_reorder_sources_permutation(self) -> None:
+        sources = [
+            {"name": "HDMI1", "action": {"type": "button", "entity_id": "button.a"}},
+            {"name": "HDMI2", "action": {"type": "button", "entity_id": "button.b"}},
+            {"name": "HDMI3", "action": {"type": "button", "entity_id": "button.c"}},
+        ]
+        reordered, error = actions.reorder_sources(
+            sources, ["HDMI3", "HDMI1", "HDMI2"]
+        )
+        self.assertIsNone(error)
+        self.assertEqual([src["name"] for src in reordered], ["HDMI3", "HDMI1", "HDMI2"])
+        self.assertEqual(reordered[0]["action"]["entity_id"], "button.c")
+
+    def test_reorder_sources_rejects_missing_or_extra(self) -> None:
+        sources = [{"name": "HDMI1"}, {"name": "HDMI2"}]
+        _, error = actions.reorder_sources(sources, ["HDMI1"])
+        self.assertEqual(error, "incomplete_source_order")
+        _, error = actions.reorder_sources(sources, ["HDMI1", "HDMI2", "HDMI3"])
+        self.assertEqual(error, "incomplete_source_order")
+        same, error = actions.reorder_sources(sources, ["HDMI1", "HDMI2"])
+        self.assertIsNone(error)
+        self.assertEqual([src["name"] for src in same], ["HDMI1", "HDMI2"])
+
 
 if __name__ == "__main__":
     unittest.main()
