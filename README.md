@@ -77,7 +77,7 @@ Home Assistant OS / Container 上一般是：
 
 然后 **完整重启 Home Assistant**（仅重新加载前端不够）。
 
-HACS：把此仓库加为 Integration 自定义仓库，下载 **红外电视 / IR Television**，再重启。
+HACS：把 [maozheng92/ir_television](https://github.com/maozheng92/ir_television) 加为 Integration 自定义仓库，下载 **红外电视 / IR Television**，再重启。
 
 **2. 添加电视并映射按键**
 
@@ -291,7 +291,7 @@ Press **Add via HomeKit Bridge (same as Sony)** on the device. That adds `media_
 
 Copy the folder `custom_components/ir_television` to `<config>/custom_components/ir_television` so that `manifest.json` is at that path. Do not flatten the package or copy the whole repository root. Then **restart Home Assistant**.
 
-**HACS:** add this repo as a custom integration repository, download **红外电视 IR Television**, restart.
+**HACS:** add [maozheng92/ir_television](https://github.com/maozheng92/ir_television) as a custom integration repository, download **红外电视 IR Television**, restart.
 
 **2. Add the TV and map keys**
 

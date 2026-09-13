@@ -2,10 +2,12 @@
   "domain": "ir_television",
   "name": "红外电视 IR Television",
   "after_dependencies": ["homekit"],
-  "codeowners": [],
+  "codeowners": ["@maozheng92"],
   "config_flow": true,
+  "documentation": "https://github.com/maozheng92/ir_television",
   "integration_type": "device",
   "iot_class": "assumed_state",
+  "issue_tracker": "https://github.com/maozheng92/ir_television/issues",
   "requirements": [],
   "version": "1.8.0"
 }
