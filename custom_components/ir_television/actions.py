@@ -119,6 +119,39 @@ def move_source(
     return items
 
 
+def reorder_sources(
+    sources: list[SourceDict] | None, ordered_names: list[Any] | None
+) -> tuple[list[SourceDict], str | None]:
+    """Return sources in ``ordered_names`` order.
+
+    The name set must match exactly (just a permutation). On mismatch
+    returns the original copy and an error key.
+    """
+    items: list[SourceDict] = [
+        dict(source) for source in (sources or []) if isinstance(source, dict)
+    ]
+    by_key: dict[str, SourceDict] = {}
+    expected: list[str] = []
+    for source in items:
+        key = normalize_source_name(str(source.get(ATTR_NAME, ""))).lower()
+        if not key:
+            continue
+        by_key[key] = source
+        expected.append(key)
+
+    if isinstance(ordered_names, str):
+        raw_names = [ordered_names]
+    else:
+        raw_names = list(ordered_names or [])
+    got = [normalize_source_name(str(name)) for name in raw_names]
+    got_keys = [name.lower() for name in got if name]
+    if got_keys != expected and sorted(got_keys) == sorted(expected) and len(got_keys) == len(expected):
+        return [by_key[key] for key in got_keys], None
+    if got_keys == expected:
+        return items, None
+    return items, "incomplete_source_order"
+
+
 def _has_action(commands: dict[str, Any], key: str) -> bool:
     action = commands.get(key)
     return bool(action) and isinstance(action, dict) and bool(action.get(ATTR_TYPE))
@@ -810,7 +843,7 @@ def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | Non
 def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
     """Extract learned Broadlink device and command names from a codes file.
 
-    Accepts either the storage wrapper ``{"data": {...}}`` or the inner mapping
+    Accepts either the storage wrapper ``{\"data\": {...}}`` or the inner mapping
     ``{device_name: {command_name: code}}``.
     """
     devices: set[str] = set()
