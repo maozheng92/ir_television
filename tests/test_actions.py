@@ -353,13 +353,21 @@ class ParseActionTests(unittest.TestCase):
             {"action_type": ACTION_BUTTON, "button_entity": "button.tv_netflix"}
         )
         self.assertIsNone(err)
-        self.assertEqual(action["type"], ACTION_BUTTON)
-        self.assertEqual(action["entity_id"], "button.tv_netflix")
-        self.assertEqual(
-            action["buttons"],
-            [{"entity_id": "button.tv_netflix", "repeats": 1}],
+        self.assertEqual(action, _btn("button.tv_netflix"))
+
+    def test_command_button_keeps_only_first(self) -> None:
+        action, err = parse_action_input(
+            {
+                "action_type": ACTION_BUTTON,
+                "button_entity": ["button.a", "button.b"],
+                "button_repeats": 3,
+                "interval": 0.5,
+            }
         )
-        self.assertAlmostEqual(action.get("interval", 0.3), 0.3)
+        self.assertIsNone(err)
+        self.assertEqual(action, _btn("button.a"))
+        self.assertNotIn("buttons", action or {})
+        self.assertNotIn("interval", action or {})
 
     def test_repeats(self) -> None:
         action, err = parse_action_input(
@@ -810,7 +818,8 @@ class ButtonSequenceTests(unittest.TestCase):
                 "button_entity": ["button.hdmi", "button.ok", "button.back"],
                 "button_repeats": 2,
                 "interval": 0.4,
-            }
+            },
+            allow_button_sequence=True,
         )
         self.assertIsNone(err)
         assert action is not None
@@ -837,7 +846,8 @@ class ButtonSequenceTests(unittest.TestCase):
             {
                 "action_type": ACTION_BUTTON,
                 "button_entity": "button.a, button.b",
-            }
+            },
+            allow_button_sequence=True,
         )
         self.assertIsNone(err)
         assert action is not None
@@ -855,7 +865,8 @@ class ButtonSequenceTests(unittest.TestCase):
                 "action_type": ACTION_BUTTON,
                 "button_entity": "button.a",
                 "interval": -1,
-            }
+            },
+            allow_button_sequence=True,
         )
         self.assertEqual(err, "invalid_interval")
         _, err = parse_action_input(
@@ -863,7 +874,8 @@ class ButtonSequenceTests(unittest.TestCase):
                 "action_type": ACTION_BUTTON,
                 "button_entity": "button.a",
                 "button_repeats": 0,
-            }
+            },
+            allow_button_sequence=True,
         )
         self.assertEqual(err, "invalid_button_repeats")
 
