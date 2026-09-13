@@ -17,7 +17,7 @@ from .actions import (
     copy_config,
     format_source_order,
     has_useful_config,
-    move_source,
+    reorder_sources,
     normalize_power_sensor,
     normalize_source_name,
     parse_action_input,
@@ -37,12 +37,13 @@ from .const import (
     CONF_NAME,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
-    CONF_SOURCE_MOVE,
+    CONF_REORDER_ACTION,
     CONF_SOURCE_NAME,
+    CONF_SOURCE_ORDER,
     CONF_SOURCES,
     DEFAULT_MANUFACTURER,
     DOMAIN,
-    SOURCE_MOVE_UP,
+    REORDER_ACTION_BACK,
     NAV_COMMANDS,
     PLAYBACK_COMMANDS,
     POWER_COMMANDS,
@@ -508,21 +509,25 @@ class TelevisionFlowMixin:
     async def async_step_source_reorder(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Move a source up or down. The list order is what HomeKit shows."""
+        """List every source and accept a drag-and-drop permutation."""
         names = [str(src.get(ATTR_NAME, "")) for src in self._data[CONF_SOURCES]]
         if len(names) < 2:
             return await self.async_step_sources()
+        errors: dict[str, str] = {}
         if user_input is not None:
-            delta = -1 if user_input.get(CONF_SOURCE_MOVE) == SOURCE_MOVE_UP else 1
-            self._data[CONF_SOURCES] = move_source(
-                self._data[CONF_SOURCES],
-                str(user_input.get("source") or ""),
-                delta=delta,
-            )
-            return await self.async_step_source_reorder()
+            if user_input.get(CONF_REORDER_ACTION) == REORDER_ACTION_BACK:
+                return await self.async_step_sources()
+            ordered = user_input.get(CONF_SOURCE_ORDER) or []
+            new_sources, error = reorder_sources(self._data[CONF_SOURCES], ordered)
+            if error:
+                errors["base"] = error
+            else:
+                self._data[CONF_SOURCES] = new_sources
+                return await self.async_step_sources()
         return self.async_show_form(
             step_id="source_reorder",
             data_schema=source_reorder_schema(names),
+            errors=errors,
             description_placeholders={
                 "source_order": format_source_order(self._data[CONF_SOURCES]),
             },
