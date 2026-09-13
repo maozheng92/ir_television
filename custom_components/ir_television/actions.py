@@ -13,9 +13,12 @@ from .const import (
     ATTR_ACTION,
     ATTR_COMMAND,
     ATTR_DEVICE,
+    ATTR_BUTTONS,
     ATTR_ENTITY_ID,
+    ATTR_INTERVAL,
     ATTR_NAME,
     ATTR_NUM_REPEATS,
+    ATTR_REPEATS,
     ATTR_TYPE,
     CMD_BACK,
     CMD_DOWN,
@@ -37,17 +40,22 @@ from .const import (
     CMD_VOLUME_UP,
     CONF_ACTION_TYPE,
     CONF_BUTTON_ENTITY,
+    CONF_BUTTON_REPEATS,
     CONF_COMMAND,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
+    CONF_INTERVAL,
     CONF_MANUFACTURER,
     CONF_NUM_REPEATS,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
+    DEFAULT_BUTTON_INTERVAL,
     DEFAULT_MANUFACTURER,
     DEFAULT_SOURCE_NAME,
+    MAX_BUTTON_INTERVAL,
+    MAX_BUTTON_REPEATS,
     HOMEKIT_DEFAULT_BRIDGE_PORT,
     HOMEKIT_EXCLUDE_ENTITIES,
     HOMEKIT_FILTER,
@@ -670,21 +678,174 @@ def has_useful_config(commands: dict[str, Any] | None, sources: list[Any] | None
     return bool(_configured_source_names(sources))
 
 
+def parse_button_entity_input(raw: Any) -> list[str]:
+    """Accept one entity id, a list, or a comma-separated string."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        parts = [part.strip() for part in raw.replace(";", ",").split(",")]
+        return [part for part in parts if part]
+    if isinstance(raw, (list, tuple)):
+        ids: list[str] = []
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                ids.append(item.strip())
+        return ids
+    return []
+
+
+def button_entity_ids(action: dict[str, Any] | None) -> list[str]:
+    """Return configured button entity ids in press order (no repeats)."""
+    if not isinstance(action, dict):
+        return []
+    buttons = action.get(ATTR_BUTTONS)
+    if isinstance(buttons, list) and buttons:
+        ids: list[str] = []
+        for item in buttons:
+            entity_id = None
+            if isinstance(item, str):
+                entity_id = item.strip()
+            elif isinstance(item, dict):
+                raw = item.get(ATTR_ENTITY_ID)
+                if isinstance(raw, str):
+                    entity_id = raw.strip()
+            if entity_id and entity_id.startswith("button.") and entity_id not in ids:
+                ids.append(entity_id)
+            elif entity_id and entity_id.startswith("button."):
+                ids.append(entity_id)
+        return ids
+    entity_id = action.get(ATTR_ENTITY_ID)
+    if isinstance(entity_id, str) and entity_id.startswith("button."):
+        return [entity_id]
+    return []
+
+
+def _button_repeats(item: Any, fallback: int = 1) -> int:
+    raw = fallback
+    if isinstance(item, dict):
+        if item.get(ATTR_REPEATS) is not None:
+            raw = item.get(ATTR_REPEATS)
+        elif item.get(ATTR_NUM_REPEATS) is not None:
+            raw = item.get(ATTR_NUM_REPEATS)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = fallback
+    return max(1, min(value, MAX_BUTTON_REPEATS))
+
+
+def button_repeat_default(action: dict[str, Any] | None) -> int:
+    """Repeats to prefill when every stored button uses the same count."""
+    if not isinstance(action, dict):
+        return 1
+    buttons = action.get(ATTR_BUTTONS)
+    if isinstance(buttons, list) and buttons:
+        counts = {_button_repeats(item, 1) for item in buttons}
+        if len(counts) == 1:
+            return counts.pop()
+        return 1
+    return _button_repeats(action, 1)
+
+
+def expand_button_presses(action: dict[str, Any] | None) -> list[str]:
+    """Entity ids in the order they should be pressed (repeats expanded)."""
+    if not isinstance(action, dict):
+        return []
+    buttons = action.get(ATTR_BUTTONS)
+    fallback = _button_repeats(action, 1)
+    if isinstance(buttons, list) and buttons:
+        presses: list[str] = []
+        for item in buttons:
+            entity_id = None
+            repeats = fallback
+            if isinstance(item, str):
+                entity_id = item.strip()
+            elif isinstance(item, dict):
+                raw = item.get(ATTR_ENTITY_ID)
+                if isinstance(raw, str):
+                    entity_id = raw.strip()
+                repeats = _button_repeats(item, fallback)
+            if not entity_id or not entity_id.startswith("button."):
+                continue
+            presses.extend([entity_id] * repeats)
+        return presses
+    entity_id = action.get(ATTR_ENTITY_ID)
+    if isinstance(entity_id, str) and entity_id.startswith("button."):
+        return [entity_id] * fallback
+    return []
+
+
+def button_press_interval(action: dict[str, Any] | None) -> float:
+    """Seconds to wait between button.press calls.
+
+    Missing interval (legacy single-button mappings) means no delay.
+    """
+    if not isinstance(action, dict):
+        return 0.0
+    raw = action.get(ATTR_INTERVAL)
+    if raw is None or raw == "":
+        return 0.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(value, MAX_BUTTON_INTERVAL))
+
+
+def parse_interval_input(raw: Any) -> tuple[float | None, str | None]:
+    """Validate a form interval (seconds). Empty uses the default."""
+    if raw is None or raw == "":
+        return DEFAULT_BUTTON_INTERVAL, None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None, "invalid_interval"
+    if value < 0 or value > MAX_BUTTON_INTERVAL:
+        return None, "invalid_interval"
+    return value, None
+
+
+def parse_button_repeats_input(raw: Any) -> tuple[int | None, str | None]:
+    """Validate per-button press count."""
+    if raw is None or raw == "":
+        return 1, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, "invalid_button_repeats"
+    if value < 1 or value > MAX_BUTTON_REPEATS:
+        return None, "invalid_button_repeats"
+    return value, None
+
+
+def copy_action(action: Any) -> dict[str, Any]:
+    """Copy a stored command / source action, including button sequences."""
+    if not isinstance(action, dict):
+        return {}
+    copied = dict(action)
+    buttons = copied.get(ATTR_BUTTONS)
+    if isinstance(buttons, list):
+        copied[ATTR_BUTTONS] = [
+            dict(item) if isinstance(item, dict) else item for item in buttons
+        ]
+    return copied
+
+
 def action_is_valid(action: Any) -> bool:
     """Return True if an action payload can be sent."""
     if not isinstance(action, dict):
         return False
     action_type = action.get(ATTR_TYPE)
-    entity_id = action.get(ATTR_ENTITY_ID)
-    if not entity_id or not isinstance(entity_id, str):
-        return False
     if action_type == ACTION_BROADLINK:
+        entity_id = action.get(ATTR_ENTITY_ID)
+        if not entity_id or not isinstance(entity_id, str):
+            return False
         if not entity_id.startswith("remote."):
             return False
         command = action.get(ATTR_COMMAND)
         return bool(isinstance(command, str) and command.strip())
     if action_type == ACTION_BUTTON:
-        return entity_id.startswith("button.")
+        return bool(expand_button_presses(action))
     return False
 
 
@@ -737,12 +898,29 @@ def parse_action_input(
         return action, None
 
     if action_type == ACTION_BUTTON:
-        entity_id = user_input.get(CONF_BUTTON_ENTITY)
-        if not entity_id:
+        ids = parse_button_entity_input(user_input.get(CONF_BUTTON_ENTITY))
+        if not ids:
             return None, "missing_button"
-        if not isinstance(entity_id, str) or not entity_id.startswith("button."):
+        if any(not entity_id.startswith("button.") for entity_id in ids):
             return None, "invalid_entity"
-        return {ATTR_TYPE: ACTION_BUTTON, ATTR_ENTITY_ID: entity_id}, None
+        repeats, error = parse_button_repeats_input(user_input.get(CONF_BUTTON_REPEATS))
+        if error:
+            return None, error
+        interval, error = parse_interval_input(user_input.get(CONF_INTERVAL))
+        if error:
+            return None, error
+        assert repeats is not None and interval is not None
+        action = {
+            ATTR_TYPE: ACTION_BUTTON,
+            ATTR_ENTITY_ID: ids[0],
+            ATTR_BUTTONS: [
+                {ATTR_ENTITY_ID: entity_id, ATTR_REPEATS: repeats} for entity_id in ids
+            ],
+            ATTR_INTERVAL: interval,
+        }
+        if repeats != 1:
+            action[ATTR_NUM_REPEATS] = repeats
+        return action, None
 
     return None, "invalid_action_type"
 
@@ -771,7 +949,28 @@ def summarize_action(action: ActionDict | None) -> str:
         return "—"
     assert action is not None
     if action[ATTR_TYPE] == ACTION_BUTTON:
-        return f"button:{action[ATTR_ENTITY_ID]}"
+        buttons = action.get(ATTR_BUTTONS)
+        fallback = _button_repeats(action, 1)
+        parts: list[str] = []
+        if isinstance(buttons, list) and buttons:
+            for item in buttons:
+                if isinstance(item, str):
+                    entity_id, repeats = item, fallback
+                elif isinstance(item, dict):
+                    entity_id = str(item.get(ATTR_ENTITY_ID) or "")
+                    repeats = _button_repeats(item, fallback)
+                else:
+                    continue
+                if not entity_id:
+                    continue
+                parts.append(entity_id if repeats == 1 else f"{entity_id}×{repeats}")
+        if not parts:
+            parts.append(str(action.get(ATTR_ENTITY_ID) or ""))
+        summary = " → ".join(parts)
+        interval = button_press_interval(action)
+        if interval and len(expand_button_presses(action)) > 1:
+            summary = f"{summary} ({interval:g}s)"
+        return f"button:{summary}"
     device = action.get(ATTR_DEVICE)
     suffix = f" / {device}" if device else ""
     return f"ir:{action[ATTR_ENTITY_ID]}{suffix} → {action[ATTR_COMMAND]}"
@@ -788,11 +987,11 @@ def copy_config(data: dict[str, Any]) -> dict[str, Any]:
         sensor = None
     return {
         "name": data.get("name", ""),
-        "commands": {key: dict(value) for key, value in commands.items() if value},
+        "commands": {key: copy_action(value) for key, value in commands.items() if value},
         "sources": [
             {
                 ATTR_NAME: src.get(ATTR_NAME, ""),
-                ATTR_ACTION: dict(src[ATTR_ACTION]) if src.get(ATTR_ACTION) else {},
+                ATTR_ACTION: copy_action(src.get(ATTR_ACTION)),
             }
             for src in sources
             if isinstance(src, dict)
