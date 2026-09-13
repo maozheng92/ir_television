@@ -341,7 +341,13 @@ class ParseActionTests(unittest.TestCase):
             {"action_type": ACTION_BUTTON, "button_entity": "button.tv_netflix"}
         )
         self.assertIsNone(err)
-        self.assertEqual(action, _btn("button.tv_netflix"))
+        self.assertEqual(action["type"], ACTION_BUTTON)
+        self.assertEqual(action["entity_id"], "button.tv_netflix")
+        self.assertEqual(
+            action["buttons"],
+            [{"entity_id": "button.tv_netflix", "repeats": 1}],
+        )
+        self.assertAlmostEqual(action.get("interval", 0.3), 0.3)
 
     def test_repeats(self) -> None:
         action, err = parse_action_input(
@@ -375,6 +381,18 @@ class ParseActionTests(unittest.TestCase):
     def test_action_is_valid(self) -> None:
         self.assertTrue(action_is_valid(_ir("ok")))
         self.assertTrue(action_is_valid(_btn()))
+        self.assertTrue(
+            action_is_valid(
+                {
+                    "type": ACTION_BUTTON,
+                    "buttons": [
+                        {"entity_id": "button.a", "repeats": 2},
+                        {"entity_id": "button.b", "repeats": 1},
+                    ],
+                    "interval": 0.5,
+                }
+            )
+        )
         self.assertFalse(
             action_is_valid({"type": ACTION_BROADLINK, "entity_id": "remote.x"})
         )
@@ -770,6 +788,109 @@ class ManufacturerAndSourceOrderTests(unittest.TestCase):
         same, error = actions.reorder_sources(sources, ["HDMI1", "HDMI2"])
         self.assertIsNone(error)
         self.assertEqual([src["name"] for src in same], ["HDMI1", "HDMI2"])
+
+
+class ButtonSequenceTests(unittest.TestCase):
+    def test_parse_multiple_buttons_in_order(self) -> None:
+        action, err = parse_action_input(
+            {
+                "action_type": ACTION_BUTTON,
+                "button_entity": ["button.hdmi", "button.ok", "button.back"],
+                "button_repeats": 2,
+                "interval": 0.4,
+            }
+        )
+        self.assertIsNone(err)
+        assert action is not None
+        self.assertEqual(
+            [item["entity_id"] for item in action["buttons"]],
+            ["button.hdmi", "button.ok", "button.back"],
+        )
+        self.assertEqual({item["repeats"] for item in action["buttons"]}, {2})
+        self.assertEqual(action["interval"], 0.4)
+        self.assertEqual(
+            actions.expand_button_presses(action),
+            [
+                "button.hdmi",
+                "button.hdmi",
+                "button.ok",
+                "button.ok",
+                "button.back",
+                "button.back",
+            ],
+        )
+
+    def test_parse_comma_separated_buttons(self) -> None:
+        action, err = parse_action_input(
+            {
+                "action_type": ACTION_BUTTON,
+                "button_entity": "button.a, button.b",
+            }
+        )
+        self.assertIsNone(err)
+        assert action is not None
+        self.assertEqual(actions.button_entity_ids(action), ["button.a", "button.b"])
+
+    def test_old_single_button_still_valid(self) -> None:
+        action = {"type": ACTION_BUTTON, "entity_id": "button.tv_ok"}
+        self.assertTrue(action_is_valid(action))
+        self.assertEqual(actions.expand_button_presses(action), ["button.tv_ok"])
+        self.assertEqual(actions.button_entity_ids(action), ["button.tv_ok"])
+
+    def test_interval_and_repeats_validation(self) -> None:
+        _, err = parse_action_input(
+            {
+                "action_type": ACTION_BUTTON,
+                "button_entity": "button.a",
+                "interval": -1,
+            }
+        )
+        self.assertEqual(err, "invalid_interval")
+        _, err = parse_action_input(
+            {
+                "action_type": ACTION_BUTTON,
+                "button_entity": "button.a",
+                "button_repeats": 0,
+            }
+        )
+        self.assertEqual(err, "invalid_button_repeats")
+
+    def test_copy_config_keeps_button_sequence(self) -> None:
+        sequence = {
+            "type": ACTION_BUTTON,
+            "entity_id": "button.a",
+            "buttons": [
+                {"entity_id": "button.a", "repeats": 3},
+                {"entity_id": "button.b", "repeats": 1},
+            ],
+            "interval": 0.2,
+        }
+        copied = copy_config(
+            {
+                "name": "TV",
+                "commands": {},
+                "sources": [{"name": "HDMI1", "action": sequence}],
+            }
+        )
+        copied["sources"][0]["action"]["buttons"][0]["repeats"] = 9
+        self.assertEqual(sequence["buttons"][0]["repeats"], 3)
+        self.assertEqual(copied["sources"][0]["action"]["interval"], 0.2)
+
+    def test_summarize_sequence(self) -> None:
+        summary = actions.summarize_action(
+            {
+                "type": ACTION_BUTTON,
+                "entity_id": "button.a",
+                "buttons": [
+                    {"entity_id": "button.a", "repeats": 2},
+                    {"entity_id": "button.b", "repeats": 1},
+                ],
+                "interval": 0.5,
+            }
+        )
+        self.assertIn("button.a×2", summary)
+        self.assertIn("button.b", summary)
+        self.assertIn("0.5s", summary)
 
 
 if __name__ == "__main__":
