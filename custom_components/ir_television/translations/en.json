@@ -4,13 +4,9 @@
     "step": {
       "user": {
         "title": "Add an IR television",
-        "description": "Give this TV a name. HomeKit manufacturer defaults to **Sony** — that is the Accessory Information field the Control Center Remote shows as **SONY** on the official Bravia accessory. You will map power, volume, playback, and sources in the next steps. Each command can be a Broadlink IR code (`remote.send_command`) or a Home Assistant button (`button.press`).",
+        "description": "Give this TV a name. You will map power, volume, playback, and sources in the next steps. Each command can be a Broadlink IR code (`remote.send_command`) or a Home Assistant button (`button.press`).",
         "data": {
-          "name": "Television name",
-          "manufacturer": "HomeKit manufacturer"
-        },
-        "data_description": {
-          "manufacturer": "Written to HomeKit Accessory Information. The working HA Bravia accessory uses Sony (the Remote list shows SONY). Change only if you know iOS will still list the brand."
+          "name": "Television name"
         }
       },
       "defaults": {
@@ -139,7 +135,7 @@
         "title": "Configure IR Television",
         "description": "**{name}** — {command_count} command(s), {source_count} source(s). Power sensor: {power_sensor}. Changes are kept until you choose Save and reload.",
         "menu_options": {
-          "name": "Name and HomeKit manufacturer",
+          "name": "Rename",
           "defaults": "Default Broadlink remote",
           "power": "Power",
           "power_sensor": "Power state sensor",
@@ -152,13 +148,9 @@
         }
       },
       "name": {
-        "title": "Name and HomeKit manufacturer",
+        "title": "Rename",
         "data": {
-          "name": "Television name",
-          "manufacturer": "HomeKit manufacturer"
-        },
-        "data_description": {
-          "manufacturer": "Must match a brand iOS already lists (Sony) unless you have confirmed otherwise."
+          "name": "Television name"
         }
       },
       "defaults": {
@@ -369,7 +361,7 @@
       "home": { "name": "Home" },
       "menu": { "name": "Menu" },
       "info": { "name": "Info" },
-      "recreate_homekit": { "name": "Align with Sony HomeKit Bridge" }
+      "recreate_homekit": { "name": "Add via HomeKit Bridge (same as Sony)" }
     }
   }
 }

@@ -59,7 +59,7 @@ class IRTelevisionKeyButton(IRTelevisionEntity, ButtonEntity):
 
 
 class IRTelevisionRecreateHomeKitButton(IRTelevisionEntity, ButtonEntity):
-    """Put this TV on Sony's HomeKit Bridge; do not rotate pairing identity."""
+    """Optional pairing helper — not part of the braviatv entity set."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.DIAGNOSTIC

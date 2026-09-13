@@ -41,16 +41,12 @@ from .const import (
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
-    CONF_MANUFACTURER,
     CONF_NUM_REPEATS,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
-    DEFAULT_HOMEKIT_MANUFACTURER,
     DEFAULT_SOURCE_NAME,
     HOMEKIT_DEFAULT_BRIDGE_PORT,
-    HOMEKIT_ENTITY_CONFIG,
-    HOMEKIT_ENTITY_MANUFACTURER,
     HOMEKIT_EXCLUDE_ENTITIES,
     HOMEKIT_FILTER,
     HOMEKIT_INCLUDE_DOMAINS,
@@ -76,39 +72,6 @@ from .const import (
 
 ActionDict = dict[str, Any]
 SourceDict = dict[str, Any]
-
-
-def resolve_manufacturer(data: dict[str, Any] | None) -> str:
-    """HomeKit Accessory Information manufacturer (braviatv uses ``Sony``)."""
-    raw = (data or {}).get(CONF_MANUFACTURER)
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
-    return DEFAULT_HOMEKIT_MANUFACTURER
-
-
-def media_player_looks_like_bravia(entity_id: str) -> bool:
-    """True for official braviatv entity ids such as ``media_player.bravia_…``."""
-    eid = (entity_id or "").strip().lower()
-    if not eid.startswith("media_player."):
-        return False
-    object_id = eid.split(".", 1)[1]
-    return object_id.startswith("bravia") or "_bravia_" in object_id
-
-
-def merge_homekit_entity_config(
-    options: dict[str, Any] | None,
-    entity_id: str,
-    *,
-    manufacturer: str,
-) -> dict[str, Any]:
-    """Set HomeKit per-entity manufacturer without dropping other overrides."""
-    merged = dict(options or {})
-    config = dict(merged.get(HOMEKIT_ENTITY_CONFIG) or {})
-    entity_cfg = dict(config.get(entity_id) or {})
-    entity_cfg[HOMEKIT_ENTITY_MANUFACTURER] = manufacturer
-    config[entity_id] = entity_cfg
-    merged[HOMEKIT_ENTITY_CONFIG] = config
-    return merged
 
 
 def _has_action(commands: dict[str, Any], key: str) -> bool:
@@ -337,8 +300,6 @@ def pick_homekit_bridge_entry_id(
         include_domains = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_DOMAINS) or [])]
         include_entities = [str(item) for item in (filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
         score = 0
-        if any(media_player_looks_like_bravia(item) for item in include_entities):
-            score += 4
         if "media_player" in include_domains:
             score += 2
         if any(item.startswith("media_player.") for item in include_entities):
@@ -762,7 +723,6 @@ def copy_config(data: dict[str, Any]) -> dict[str, Any]:
         CONF_DEFAULT_DEVICE: data.get(CONF_DEFAULT_DEVICE),
         CONF_POWER_SENSOR: sensor,
         CONF_POWER_SENSOR_INVERT: bool(data.get(CONF_POWER_SENSOR_INVERT)),
-        CONF_MANUFACTURER: resolve_manufacturer(data),
     }
 
 

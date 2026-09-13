@@ -13,15 +13,9 @@ DEFAULT_SOURCE_NAME = "TV"
 # sends a D-pad / menu key (see homeassistant.components.homekit).
 EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED = "homekit_tv_remote_key_pressed"
 
-# HAP Accessory Information Manufacturer. Control Center Remote lists the
-# official braviatv accessory as **SONY** (this field, uppercased). Unknown
-# brands such as "IR Television" stay a Home TV tile but are omitted from
-# that device picker.
-DEFAULT_HOMEKIT_MANUFACTURER = "Sony"
-MANUFACTURER = DEFAULT_HOMEKIT_MANUFACTURER
+MANUFACTURER = "IR Television"
 
 CONF_NAME = "name"
-CONF_MANUFACTURER = "manufacturer"
 CONF_COMMANDS = "commands"
 CONF_SOURCES = "sources"
 CONF_DEFAULT_REMOTE = "default_remote"
@@ -149,8 +143,6 @@ HOMEKIT_MODE_ACCESSORY = "accessory"
 HOMEKIT_MODE_BRIDGE = "bridge"
 HOMEKIT_DEFAULT_BRIDGE_PORT = 21063
 HOMEKIT_FILTER = "filter"
-HOMEKIT_ENTITY_CONFIG = "entity_config"
-HOMEKIT_ENTITY_MANUFACTURER = "manufacturer"
 HOMEKIT_INCLUDE_DOMAINS = "include_domains"
 HOMEKIT_INCLUDE_ENTITIES = "include_entities"
 HOMEKIT_EXCLUDE_ENTITIES = "exclude_entities"

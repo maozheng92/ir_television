@@ -419,19 +419,15 @@ class PowerSensorTests(unittest.TestCase):
                 "sources": [],
                 "power_sensor": "binary_sensor.plug_tv",
                 "power_sensor_invert": True,
-                "manufacturer": "TCL",
             }
         )
         self.assertEqual(copied["power_sensor"], "binary_sensor.plug_tv")
         self.assertTrue(copied["power_sensor_invert"])
-        self.assertEqual(copied["manufacturer"], "TCL")
 
     def test_copy_config_defaults_sensor(self) -> None:
         copied = copy_config({"name": "TV", "commands": {}, "sources": []})
         self.assertIsNone(copied["power_sensor"])
         self.assertFalse(copied["power_sensor_invert"])
-        self.assertEqual(copied["manufacturer"], const.DEFAULT_HOMEKIT_MANUFACTURER)
-        self.assertEqual(copied["manufacturer"], "Sony")
 
 
 class BroadlinkCodesTests(unittest.TestCase):
@@ -719,65 +715,6 @@ class HomeKitAccessoryHelperTests(unittest.TestCase):
             ),
             {21063, 21064},
         )
-
-
-class HomeKitManufacturerTests(unittest.TestCase):
-    def test_default_manufacturer_is_sony(self) -> None:
-        self.assertEqual(const.DEFAULT_HOMEKIT_MANUFACTURER, "Sony")
-        self.assertEqual(const.MANUFACTURER, "Sony")
-        self.assertEqual(actions.resolve_manufacturer(None), "Sony")
-        self.assertEqual(actions.resolve_manufacturer({}), "Sony")
-        self.assertEqual(actions.resolve_manufacturer({"manufacturer": "  "}), "Sony")
-        self.assertEqual(
-            actions.resolve_manufacturer({"manufacturer": "TCL"}),
-            "TCL",
-        )
-
-    def test_bravia_entity_ids(self) -> None:
-        self.assertTrue(
-            actions.media_player_looks_like_bravia("media_player.bravia_kd_55x9000b")
-        )
-        self.assertTrue(
-            actions.media_player_looks_like_bravia("media_player.living_bravia_tv")
-        )
-        self.assertFalse(actions.media_player_looks_like_bravia("media_player.tcl"))
-        self.assertFalse(actions.media_player_looks_like_bravia("remote.bravia"))
-
-    def test_pick_prefers_bridge_that_already_has_bravia(self) -> None:
-        entries = [
-            (
-                {"mode": "bridge", "port": 21063},
-                {"filter": {"include_domains": ["media_player"]}},
-                "generic_tv_bridge",
-            ),
-            (
-                {"mode": "bridge", "port": 21064},
-                {
-                    "filter": {
-                        "include_entities": ["media_player.bravia_kd_55x9000b"],
-                    }
-                },
-                "sony_bridge",
-            ),
-        ]
-        self.assertEqual(pick_homekit_bridge_entry_id(entries), "sony_bridge")
-
-    def test_merge_entity_config_keeps_other_overrides(self) -> None:
-        options = {
-            "entity_config": {
-                "media_player.tcl": {"name": "TCL"},
-                "light.x": {"name": "Lamp"},
-            }
-        }
-        merged = actions.merge_homekit_entity_config(
-            options, "media_player.tcl", manufacturer="Sony"
-        )
-        self.assertEqual(merged["entity_config"]["media_player.tcl"]["name"], "TCL")
-        self.assertEqual(
-            merged["entity_config"]["media_player.tcl"]["manufacturer"],
-            "Sony",
-        )
-        self.assertEqual(merged["entity_config"]["light.x"]["name"], "Lamp")
 
 
 if __name__ == "__main__":
