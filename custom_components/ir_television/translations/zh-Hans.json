@@ -292,10 +292,13 @@
       },
       "source_reorder": {
         "title": "调整输入源顺序",
-        "description": "当前顺序（第一项为默认源）：{source_order}。选一个源上移或下移，提交后可继续调整。",
+        "description": "下面列出全部输入源，按住左侧手柄拖拽调整顺序（第一项为默认源）。当前：{source_order}。选 **返回** 不保存；拖好后选 **保存并返回**。",
         "data": {
-          "source": "输入源",
-          "source_move": "移动"
+          "reorder_action": "提交后",
+          "source_order": "输入源"
+        },
+        "data_description": {
+          "source_order": "拖动排序，不要从列表里删掉任何一个源。"
         }
       },
       "save": {
@@ -313,7 +316,8 @@
       "invalid_action_type": "请选择 Broadlink 红外或按钮。",
       "invalid_repeats": "重复次数必须是 1 到 10 之间的整数。",
       "no_commands": "请至少保留一条指令或一个输入源。",
-      "invalid_power_sensor": "请选择 binary_sensor 实体，或不填此项。"
+      "invalid_power_sensor": "请选择 binary_sensor 实体，或不填此项。",
+      "incomplete_source_order": "请保留全部输入源，只调整先后顺序。"
     },
     "abort": {
       "unknown": "出现了未知错误。"
@@ -366,10 +370,10 @@
         "skip": "未配置"
       }
     },
-    "source_move": {
+    "reorder_action": {
       "options": {
-        "up": "上移",
-        "down": "下移"
+        "back": "返回（不保存）",
+        "apply": "保存顺序并返回"
       }
     }
   },
