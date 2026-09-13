@@ -27,7 +27,7 @@
       },
       "power_mode": {
         "title": "Power",
-        "description": "The entity row and Control Center show one power button. New TVs use a single key for on and off. Current mappings:\n{current}",
+        "description": "The entity row always shows one power button. A single key sends that key; separate on/off commands are chosen from the current TV state (power sensor if set, otherwise assumed on/off). Current mappings:\n{current}",
         "data": {
           "power_mode": "Power keys"
         }
@@ -179,7 +179,7 @@
       },
       "power_mode": {
         "title": "Power",
-        "description": "Choosing a new mode replaces the current power mappings.\n{current}",
+        "description": "Choosing a new mode replaces the current power mappings. The entity still shows one power button; separate on/off commands are sent according to TV state.\n{current}",
         "data": {
           "power_mode": "Power keys"
         }
@@ -346,7 +346,7 @@
     },
     "power_mode": {
       "options": {
-        "on_off": "Separate power on and power off",
+        "on_off": "Separate on/off commands (one button, chosen by TV state)",
         "toggle": "Single power button (same key for on and off)",
         "skip": "Skip for now"
       }
