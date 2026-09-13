@@ -843,7 +843,7 @@ def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | Non
 def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
     """Extract learned Broadlink device and command names from a codes file.
 
-    Accepts either the storage wrapper ``{\"data\": {...}}`` or the inner mapping
+    Accepts either the storage wrapper ``{"data": {...}}`` or the inner mapping
     ``{device_name: {command_name: code}}``.
     """
     devices: set[str] = set()
