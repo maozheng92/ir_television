@@ -15,7 +15,9 @@ except ImportError:  # Home Assistant < 2024.4
 
 from .actions import (
     copy_config,
+    format_source_order,
     has_useful_config,
+    move_source,
     normalize_power_sensor,
     normalize_source_name,
     parse_action_input,
@@ -31,12 +33,16 @@ from .const import (
     CONF_COMMANDS,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
+    CONF_MANUFACTURER,
     CONF_NAME,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
+    CONF_SOURCE_MOVE,
     CONF_SOURCE_NAME,
     CONF_SOURCES,
+    DEFAULT_MANUFACTURER,
     DOMAIN,
+    SOURCE_MOVE_UP,
     NAV_COMMANDS,
     PLAYBACK_COMMANDS,
     POWER_COMMANDS,
@@ -58,6 +64,7 @@ from .flow_schemas import (
     source_ask_schema,
     source_name_schema,
     source_pick_schema,
+    source_reorder_schema,
 )
 
 
@@ -84,6 +91,7 @@ class TelevisionFlowMixin:
             CONF_DEFAULT_DEVICE: None,
             CONF_POWER_SENSOR: None,
             CONF_POWER_SENSOR_INVERT: False,
+            CONF_MANUFACTURER: DEFAULT_MANUFACTURER,
         }
         if CONF_COMMANDS not in self._data or self._data[CONF_COMMANDS] is None:
             self._data[CONF_COMMANDS] = {}
@@ -91,6 +99,7 @@ class TelevisionFlowMixin:
             self._data[CONF_SOURCES] = []
         self._data.setdefault(CONF_POWER_SENSOR, None)
         self._data.setdefault(CONF_POWER_SENSOR_INVERT, False)
+        self._data.setdefault(CONF_MANUFACTURER, DEFAULT_MANUFACTURER)
         self._queue = []
         self._after_queue = "volume_select"
         self._source_draft = {}
@@ -392,7 +401,9 @@ class TelevisionFlowMixin:
             errors=errors,
             description_placeholders={
                 "source_count": str(len(self._data[CONF_SOURCES])),
-                "source_names": ", ".join(names) if names else "—",
+                "source_names": format_source_order(self._data[CONF_SOURCES])
+                if names
+                else "—",
             },
         )
 
@@ -480,13 +491,40 @@ class TelevisionFlowMixin:
         menu = ["source_add"]
         if names:
             menu.extend(["source_edit", "source_delete"])
+        if len(names) >= 2:
+            menu.append("source_reorder")
         menu.append("init")
         return self.async_show_menu(
             step_id="sources",
             menu_options=menu,
             description_placeholders={
                 "source_count": str(len(names)),
-                "source_names": ", ".join(names) if names else "—",
+                "source_names": format_source_order(self._data[CONF_SOURCES])
+                if names
+                else "—",
+            },
+        )
+
+    async def async_step_source_reorder(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Move a source up or down. The list order is what HomeKit shows."""
+        names = [str(src.get(ATTR_NAME, "")) for src in self._data[CONF_SOURCES]]
+        if len(names) < 2:
+            return await self.async_step_sources()
+        if user_input is not None:
+            delta = -1 if user_input.get(CONF_SOURCE_MOVE) == SOURCE_MOVE_UP else 1
+            self._data[CONF_SOURCES] = move_source(
+                self._data[CONF_SOURCES],
+                str(user_input.get("source") or ""),
+                delta=delta,
+            )
+            return await self.async_step_source_reorder()
+        return self.async_show_form(
+            step_id="source_reorder",
+            data_schema=source_reorder_schema(names),
+            description_placeholders={
+                "source_order": format_source_order(self._data[CONF_SOURCES]),
             },
         )
 
@@ -582,15 +620,23 @@ class IRTelevisionConfigFlow(ConfigFlow, TelevisionFlowMixin, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = normalize_source_name(user_input.get(CONF_NAME))
+            manufacturer = (
+                normalize_source_name(user_input.get(CONF_MANUFACTURER))
+                or DEFAULT_MANUFACTURER
+            )
             if not name:
                 errors["base"] = "empty_name"
             else:
                 self._data[CONF_NAME] = name
+                self._data[CONF_MANUFACTURER] = manufacturer
                 return await self.async_step_defaults()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=name_schema(self._data.get(CONF_NAME)),
+            data_schema=name_schema(
+                self._data.get(CONF_NAME),
+                self._data.get(CONF_MANUFACTURER),
+            ),
             errors=errors,
         )
 
@@ -661,14 +707,22 @@ class IRTelevisionOptionsFlow(OptionsFlow, TelevisionFlowMixin):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = normalize_source_name(user_input.get(CONF_NAME))
+            manufacturer = (
+                normalize_source_name(user_input.get(CONF_MANUFACTURER))
+                or DEFAULT_MANUFACTURER
+            )
             if not name:
                 errors["base"] = "empty_name"
             else:
                 self._data[CONF_NAME] = name
+                self._data[CONF_MANUFACTURER] = manufacturer
                 return await self.async_step_init()
         return self.async_show_form(
             step_id="name",
-            data_schema=name_schema(self._data.get(CONF_NAME)),
+            data_schema=name_schema(
+                self._data.get(CONF_NAME),
+                self._data.get(CONF_MANUFACTURER),
+            ),
             errors=errors,
         )
 
@@ -727,6 +781,12 @@ class IRTelevisionOptionsFlow(OptionsFlow, TelevisionFlowMixin):
     ) -> ConfigFlowResult:
         self._ensure()
         return await super().async_step_source_add(user_input)
+
+    async def async_step_source_reorder(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure()
+        return await super().async_step_source_reorder(user_input)
 
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None

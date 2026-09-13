@@ -37,7 +37,12 @@ from .const import (
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
+    CONF_MANUFACTURER,
     CONF_NAME,
+    CONF_SOURCE_MOVE,
+    DEFAULT_MANUFACTURER,
+    SOURCE_MOVE_DOWN,
+    SOURCE_MOVE_UP,
     CONF_NUM_REPEATS,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
@@ -128,11 +133,39 @@ def _name_dropdown(names: list[str], *, current: str = "") -> SelectSelector:
     )
 
 
-def name_schema(default: str | None = None) -> vol.Schema:
-    """TV display name."""
+def name_schema(
+    default: str | None = None,
+    manufacturer: str | None = None,
+) -> vol.Schema:
+    """TV display name plus HomeKit / device manufacturer."""
     return vol.Schema(
         {
             vol.Required(CONF_NAME, default=default or ""): _text(),
+            vol.Required(
+                CONF_MANUFACTURER,
+                default=manufacturer or DEFAULT_MANUFACTURER,
+            ): _text(),
+        }
+    )
+
+
+def source_reorder_schema(names: list[str]) -> vol.Schema:
+    """Pick a source and move it up or down in the advertised list."""
+    return vol.Schema(
+        {
+            vol.Required("source"): SelectSelector(
+                SelectSelectorConfig(
+                    options=names,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(CONF_SOURCE_MOVE, default=SOURCE_MOVE_UP): SelectSelector(
+                SelectSelectorConfig(
+                    options=[SOURCE_MOVE_UP, SOURCE_MOVE_DOWN],
+                    mode=SelectSelectorMode.LIST,
+                    translation_key="source_move",
+                )
+            ),
         }
     )
 

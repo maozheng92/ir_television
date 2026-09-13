@@ -41,10 +41,12 @@ from .const import (
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
+    CONF_MANUFACTURER,
     CONF_NUM_REPEATS,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
     CONF_REMOTE_ENTITY,
+    DEFAULT_MANUFACTURER,
     DEFAULT_SOURCE_NAME,
     HOMEKIT_DEFAULT_BRIDGE_PORT,
     HOMEKIT_EXCLUDE_ENTITIES,
@@ -72,6 +74,49 @@ from .const import (
 
 ActionDict = dict[str, Any]
 SourceDict = dict[str, Any]
+
+
+def resolve_manufacturer(data: dict[str, Any] | None) -> str:
+    """Return the configured manufacturer, or the integration default."""
+    raw = (data or {}).get(CONF_MANUFACTURER)
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return DEFAULT_MANUFACTURER
+
+
+def format_source_order(sources: list[Any] | None) -> str:
+    """Human-readable source order for config-flow placeholders."""
+    names = _configured_source_names(sources)
+    if not names:
+        return "—"
+    return " → ".join(f"{index}. {name}" for index, name in enumerate(names, start=1))
+
+
+def move_source(
+    sources: list[SourceDict] | None, name: str, *, delta: int
+) -> list[SourceDict]:
+    """Return a copy of ``sources`` with ``name`` moved by ``delta`` (-1 / +1)."""
+    items: list[SourceDict] = [
+        dict(source) for source in (sources or []) if isinstance(source, dict)
+    ]
+    target = normalize_source_name(name).lower()
+    if not target or delta == 0:
+        return items
+    index = next(
+        (
+            idx
+            for idx, source in enumerate(items)
+            if normalize_source_name(str(source.get(ATTR_NAME, ""))).lower() == target
+        ),
+        None,
+    )
+    if index is None:
+        return items
+    new_index = index + int(delta)
+    if new_index < 0 or new_index >= len(items):
+        return items
+    items[index], items[new_index] = items[new_index], items[index]
+    return items
 
 
 def _has_action(commands: dict[str, Any], key: str) -> bool:
@@ -723,6 +768,7 @@ def copy_config(data: dict[str, Any]) -> dict[str, Any]:
         CONF_DEFAULT_DEVICE: data.get(CONF_DEFAULT_DEVICE),
         CONF_POWER_SENSOR: sensor,
         CONF_POWER_SENSOR_INVERT: bool(data.get(CONF_POWER_SENSOR_INVERT)),
+        CONF_MANUFACTURER: resolve_manufacturer(data),
     }
 
 

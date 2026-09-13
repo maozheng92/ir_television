@@ -18,7 +18,7 @@ Each key or input source is either **Broadlink IR** (`remote.send_command`) or a
 - 电源状态：默认乐观 / 假定；可选用 `binary_sensor` 作为真实开关回读（智能插座、电流钳、HDMI-CEC、模板等）
 - 未配置自定义输入源时，仍会自动暴露一个默认源 **TV**，并始终带上与官方 Sony Bravia 相同的功能位（`supported_features: 155581`，含 `PLAY_MEDIA` / `BROWSE_MEDIA`）
 - 当前输入与索尼 Bravia 一样走实体属性 `source` / `source_list`（更多信息里会显示下拉框）。红外读不到真实 HDMI，显示的是上次选择或列表第一项，不会是空的
-- HomeKit **Model** 与 braviatv 一样不写 `DeviceInfo.model`，由 HA HomeKit 回落到 **Media Player**。Manufacturer 仍是集成名（索尼是 `Sony`）
+- HomeKit **Model** 与 braviatv 一样不写 `DeviceInfo.model`，由 HA HomeKit 回落到 **Media Player**。**生产企业 / Manufacturer 可在添加或配置里自定义**（默认 `IR Television`，会写入设备和 HomeKit 配件信息）
 - **`remote` 与电视是同一设备上的第二个实体**（`_attr_name = None`，无 ACTIVITY），只给 HA 自动化发红外用。**不会**单独创建 HomeKit 配件——和官方 braviatv 一样，iOS 遥控器只认 `media_player`
 - 方向键由 HomeKit 事件 `homekit_tv_remote_key_pressed` 发到 `media_player`
 
@@ -250,9 +250,11 @@ Broadlink 实体暂时不可用时，本集成**不会崩溃**，只会在日志
 - `unavailable` / `unknown` 时保留上一次明确状态
 - 清空该字段即恢复假定开关。静音和当前输入源仍是本地乐观状态
 
-### 自定义输入源
+### 自定义输入源与排序
 
 每个源包含显示名称和动作（Broadlink 或按钮）。选择源会发送对应指令，并乐观更新当前 `source`。未添加任何源时，实体仍会报告 `source_list: ["TV"]`（无红外动作），以满足 HomeKit。
+
+**列表顺序就是 Home Assistant / HomeKit 的显示顺序。** 初次添加时按你加入的先后排列；之后在集成卡片 **配置 → 输入源 → 调整输入源顺序** 里上移 / 下移。
 
 ---
 
@@ -268,7 +270,10 @@ A HACS-ready custom component (`custom_components/ir_television`) that creates o
 - A listener for `homekit_tv_remote_key_pressed` so Control Center D-pad keys fire IR
 - Optional `binary_sensor` for real power feedback
 - Optional diagnostic `button` entities for d-pad / back / home / menu / info (hidden from HomeKit)
+- Configurable manufacturer (生产企业) written to DeviceInfo / HomeKit
+- Reorderable input sources in **Configure → Sources**
 - Config Flow + Options Flow (`en` and `zh-Hans`)
+- Brand icon in `custom_components/ir_television/brand/` (Home Assistant 2026.3+) and repo-root `icon.png` for HACS
 
 It does **not** talk to the TV over HDMI-CEC or a network API. It fires commands you already have in Home Assistant. It does **not** auto-create HomeKit config entries; include the `media_player` in your existing HomeKit setup the same way as Sony.
 
@@ -334,7 +339,7 @@ Optional. Point the wizard at a `binary_sensor` that is `on` when the TV is on. 
 
 ### Custom sources
 
-Each source has a display name and one action. If you add none, the entity still reports `source_list: ["TV"]` with no IR action so HomeKit can create Input Source services.
+Each source has a display name and one action. List order is the Home Assistant / HomeKit order. Reorder later under **Configure → Sources → Reorder sources**. If you add none, the entity still reports `source_list: ["TV"]` with no IR action so HomeKit can create Input Source services.
 
 ---
 
@@ -360,9 +365,11 @@ custom_components/ir_television/
   button.py
   diagnostics.py
   icons.json
+  brand/              # HA 2026.3+ local integration icon
   strings.json
   translations/en.json
   translations/zh-Hans.json
+icon.png              # HACS store icon
 ```
 
 Syntax check (no Home Assistant install required):

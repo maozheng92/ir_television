@@ -419,15 +419,18 @@ class PowerSensorTests(unittest.TestCase):
                 "sources": [],
                 "power_sensor": "binary_sensor.plug_tv",
                 "power_sensor_invert": True,
+                "manufacturer": "TCL",
             }
         )
         self.assertEqual(copied["power_sensor"], "binary_sensor.plug_tv")
         self.assertTrue(copied["power_sensor_invert"])
+        self.assertEqual(copied["manufacturer"], "TCL")
 
     def test_copy_config_defaults_sensor(self) -> None:
         copied = copy_config({"name": "TV", "commands": {}, "sources": []})
         self.assertIsNone(copied["power_sensor"])
         self.assertFalse(copied["power_sensor_invert"])
+        self.assertEqual(copied["manufacturer"], "IR Television")
 
 
 class BroadlinkCodesTests(unittest.TestCase):
@@ -715,6 +718,35 @@ class HomeKitAccessoryHelperTests(unittest.TestCase):
             ),
             {21063, 21064},
         )
+
+
+class ManufacturerAndSourceOrderTests(unittest.TestCase):
+    def test_resolve_manufacturer(self) -> None:
+        self.assertEqual(const.DEFAULT_MANUFACTURER, "IR Television")
+        self.assertEqual(actions.resolve_manufacturer(None), "IR Television")
+        self.assertEqual(actions.resolve_manufacturer({}), "IR Television")
+        self.assertEqual(actions.resolve_manufacturer({"manufacturer": "  "}), "IR Television")
+        self.assertEqual(actions.resolve_manufacturer({"manufacturer": "TCL"}), "TCL")
+
+    def test_format_source_order(self) -> None:
+        self.assertEqual(actions.format_source_order([]), "—")
+        self.assertEqual(
+            actions.format_source_order(
+                [{"name": "HDMI1"}, {"name": "HDMI2"}, {"name": "HDMI3"}]
+            ),
+            "1. HDMI1 → 2. HDMI2 → 3. HDMI3",
+        )
+
+    def test_move_source_up_and_down(self) -> None:
+        sources = [{"name": "HDMI1"}, {"name": "HDMI2"}, {"name": "HDMI3"}]
+        down = actions.move_source(sources, "HDMI1", delta=1)
+        self.assertEqual([src["name"] for src in down], ["HDMI2", "HDMI1", "HDMI3"])
+        up = actions.move_source(down, "HDMI3", delta=-1)
+        self.assertEqual([src["name"] for src in up], ["HDMI2", "HDMI3", "HDMI1"])
+        stuck = actions.move_source(sources, "HDMI1", delta=-1)
+        self.assertEqual([src["name"] for src in stuck], ["HDMI1", "HDMI2", "HDMI3"])
+        missing = actions.move_source(sources, "Netflix", delta=1)
+        self.assertEqual([src["name"] for src in missing], ["HDMI1", "HDMI2", "HDMI3"])
 
 
 if __name__ == "__main__":

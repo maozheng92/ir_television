@@ -42,6 +42,16 @@ class JsonFileTests(unittest.TestCase):
         self.assertIn("step", payload["config"])
         self.assertIn("user", payload["config"]["step"])
 
+    def test_brand_icons_exist(self) -> None:
+        brand = _PKG / "brand"
+        for name in ("icon.png", "icon@2x.png", "logo.png"):
+            path = brand / name
+            self.assertTrue(path.is_file(), f"missing {path}")
+            self.assertGreater(path.stat().st_size, 1024, f"{name} is too small")
+        root_icon = _PKG.parents[1] / "icon.png"
+        self.assertTrue(root_icon.is_file(), "missing repo-root icon.png for HACS")
+        self.assertGreater(root_icon.stat().st_size, 1024)
+
 
 if __name__ == "__main__":
     unittest.main()

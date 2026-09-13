@@ -3,11 +3,14 @@
 把普通红外电视变成 Home Assistant 的 **Television Media Player**（`device_class=tv`），供 **iOS 控制中心「隔空播放遥控器 / Apple TV Remote」**（HomeKit）使用。
 
 - 图形化配置（Config Flow / Options Flow）
+- 可自定义 **生产企业**（写入设备和 HomeKit 配件信息）
+- 输入源可在配置里 **上移 / 下移**（顺序即 HA / HomeKit 显示顺序）
 - 每条指令可映射 **Broadlink 红外**（`remote.send_command`）或 **按钮**（`button.press`）
 - `media_player` 属性集与官方 **braviatv** 对齐（`device_class=tv`、功能位 155581、ON/OFF、`source`/`source_list`、同一组 `media_*`）
 - **电视与遥控器是同一设备**：HomeKit 只暴露 `media_player`；`DeviceInfo` 不写 model（HomeKit Model = Media Player）
 - 监听 `homekit_tv_remote_key_pressed`，方向键可发红外
 - 可选 `binary_sensor` 作为电源状态回读
+- 自带集成图标（`brand/` + 仓库根目录 `icon.png`）
 
 安装：把 `custom_components/ir_television/` **整个文件夹**复制到 Home Assistant 配置目录（必须包含 `translations/en.json`，不能是空文件），**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。若向导报 `en.json` 空文档，删掉该目录后重新完整拷贝。
 

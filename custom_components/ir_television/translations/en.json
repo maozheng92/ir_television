@@ -4,9 +4,13 @@
     "step": {
       "user": {
         "title": "Add an IR television",
-        "description": "Give this TV a name. You will map power, volume, playback, and sources in the next steps. Each command can be a Broadlink IR code (`remote.send_command`) or a Home Assistant button (`button.press`).",
+        "description": "Give this TV a name and the manufacturer shown in Home Assistant / HomeKit Accessory Information. You will map power, volume, playback, and sources in the next steps. Each command can be a Broadlink IR code (`remote.send_command`) or a Home Assistant button (`button.press`).",
         "data": {
-          "name": "Television name"
+          "name": "Television name",
+          "manufacturer": "Manufacturer"
+        },
+        "data_description": {
+          "manufacturer": "Shown as the device manufacturer (生产企业). HomeKit Accessory Information uses this field. Default is IR Television."
         }
       },
       "defaults": {
@@ -88,7 +92,7 @@
       },
       "source_ask": {
         "title": "Input sources",
-        "description": "Sources appear in `source_list` and in the Apple Home / Control Center Remote source picker (HDMI 1, Netflix, …). If you add none, a default **TV** source is still advertised so HomeKit can create the Remote. Configured sources ({source_count}): {source_names}",
+        "description": "Sources appear in `source_list` and in the Apple Home / Control Center Remote source picker in this order. Add them in the order you want, or reorder later in Configure. If you add none, a default **TV** source is still advertised so HomeKit can create the Remote. Configured sources ({source_count}): {source_names}",
         "data": {
           "add_source": "Add a source"
         }
@@ -135,7 +139,7 @@
         "title": "Configure IR Television",
         "description": "**{name}** — {command_count} command(s), {source_count} source(s). Power sensor: {power_sensor}. Changes are kept until you choose Save and reload.",
         "menu_options": {
-          "name": "Rename",
+          "name": "Name and manufacturer",
           "defaults": "Default Broadlink remote",
           "power": "Power",
           "power_sensor": "Power state sensor",
@@ -148,9 +152,13 @@
         }
       },
       "name": {
-        "title": "Rename",
+        "title": "Name and manufacturer",
         "data": {
-          "name": "Television name"
+          "name": "Television name",
+          "manufacturer": "Manufacturer"
+        },
+        "data_description": {
+          "manufacturer": "Device / HomeKit manufacturer (生产企业)."
         }
       },
       "defaults": {
@@ -236,11 +244,12 @@
       },
       "sources": {
         "title": "Sources",
-        "description": "Configured sources ({source_count}): {source_names}",
+        "description": "Order is what Home Assistant and HomeKit show ({source_count}): {source_names}",
         "menu_options": {
           "source_add": "Add a source",
           "source_edit": "Edit a source",
           "source_delete": "Delete a source",
+          "source_reorder": "Reorder sources",
           "init": "Back"
         }
       },
@@ -279,6 +288,14 @@
         "description": "This only removes the mapping from this integration. Learned IR codes are not deleted.",
         "data": {
           "source": "Source"
+        }
+      },
+      "source_reorder": {
+        "title": "Reorder sources",
+        "description": "Current order (first is the default): {source_order}. Pick a source and move it. Submit again to keep adjusting.",
+        "data": {
+          "source": "Source",
+          "source_move": "Move"
         }
       },
       "save": {
@@ -347,6 +364,12 @@
         "set": "Set / replace mapping",
         "remove": "Remove mapping",
         "skip": "Not configured"
+      }
+    },
+    "source_move": {
+      "options": {
+        "up": "Move up",
+        "down": "Move down"
       }
     }
   },

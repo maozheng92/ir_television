@@ -13,9 +13,11 @@ DEFAULT_SOURCE_NAME = "TV"
 # sends a D-pad / menu key (see homeassistant.components.homekit).
 EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED = "homekit_tv_remote_key_pressed"
 
-MANUFACTURER = "IR Television"
+DEFAULT_MANUFACTURER = "IR Television"
+MANUFACTURER = DEFAULT_MANUFACTURER
 
 CONF_NAME = "name"
+CONF_MANUFACTURER = "manufacturer"
 CONF_COMMANDS = "commands"
 CONF_SOURCES = "sources"
 CONF_DEFAULT_REMOTE = "default_remote"
@@ -31,6 +33,9 @@ CONF_DEVICE = "device"
 CONF_COMMAND = "command"
 CONF_NUM_REPEATS = "num_repeats"
 CONF_SOURCE_NAME = "source_name"
+CONF_SOURCE_MOVE = "source_move"
+SOURCE_MOVE_UP = "up"
+SOURCE_MOVE_DOWN = "down"
 
 ACTION_BROADLINK = "broadlink"
 ACTION_BUTTON = "button"
