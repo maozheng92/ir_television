@@ -27,7 +27,7 @@
       },
       "power_mode": {
         "title": "Power",
-        "description": "Most TVs have either separate on/off keys or a single power toggle. Current mappings:\n{current}",
+        "description": "The entity row and Control Center show one power button. New TVs use a single key for on and off. Current mappings:\n{current}",
         "data": {
           "power_mode": "Power keys"
         }
@@ -46,20 +46,24 @@
       },
       "command": {
         "title": "Map: {command}",
-        "description": "Configure **{command}** (`{command_key}`).\n\n• Broadlink: choose a `remote.*` entity from the dropdown (or rely on the default), then pick/enter the Broadlink device name and learned command.\n• Button: choose a `button.*` entity from the dropdown.",
+        "description": "Configure **{command}** (`{command_key}`).\n\n• Broadlink: choose a `remote.*` entity from the dropdown (or rely on the default), then pick/enter the Broadlink device name and learned command.\n• Button: choose one or more `button.*` entities. They run in order; set repeats per button and the delay between presses.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "Broadlink / remote entity",
           "device": "Broadlink device name",
           "command": "Learned command name",
           "num_repeats": "IR repeats",
-          "button_entity": "Button entity"
+          "button_entity": "Buttons",
+          "button_repeats": "Repeats per button",
+          "interval": "Delay between presses (seconds)"
         },
         "data_description": {
           "remote_entity": "Required for Broadlink unless you set a default remote.",
           "device": "Required by the official Broadlink integration in most setups.",
           "command": "The name you gave the code when you learned it (for example `power_on`).",
-          "button_entity": "Required when the control method is Button."
+          "button_entity": "Required when the control method is Button. Select one or more `button.*` entities; they run in list order (drag to reorder).",
+          "button_repeats": "Each selected button is pressed this many times before the next button.",
+          "interval": "Wait this many seconds between every button.press (including repeats)."
         }
       },
       "volume_select": {
@@ -106,14 +110,16 @@
       },
       "source_action": {
         "title": "Source action: {source_name}",
-        "description": "What should happen when someone selects **{source_name}**?",
+        "description": "What should happen when someone selects **{source_name}**? For Button, pick one or more buttons to run in order.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "Broadlink / remote entity",
           "device": "Broadlink device name",
           "command": "Learned command name",
           "num_repeats": "IR repeats",
-          "button_entity": "Button entity"
+          "button_entity": "Buttons",
+          "button_repeats": "Repeats per button",
+          "interval": "Delay between presses (seconds)"
         }
       }
     },
@@ -126,6 +132,8 @@
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
       "invalid_action_type": "Choose Broadlink IR or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
+      "invalid_button_repeats": "Each button must repeat between 1 and 10 times.",
+      "invalid_interval": "The delay must be between 0 and 10 seconds.",
       "no_commands": "Configure at least one command or one source before finishing.",
       "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty."
     },
@@ -197,7 +205,9 @@
           "device": "Broadlink device name",
           "command": "Learned command name",
           "num_repeats": "IR repeats",
-          "button_entity": "Button entity"
+          "button_entity": "Buttons",
+          "button_repeats": "Repeats per button",
+          "interval": "Delay between presses (seconds)"
         }
       },
       "volume": {
@@ -261,14 +271,16 @@
       },
       "source_action": {
         "title": "Source action: {source_name}",
-        "description": "Command sent when **{source_name}** is selected.",
+        "description": "Command sent when **{source_name}** is selected. Buttons run in order, with optional repeats and delay.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "Broadlink / remote entity",
           "device": "Broadlink device name",
           "command": "Learned command name",
           "num_repeats": "IR repeats",
-          "button_entity": "Button entity"
+          "button_entity": "Buttons",
+          "button_repeats": "Repeats per button",
+          "interval": "Delay between presses (seconds)"
         }
       },
       "source_edit": {
@@ -315,6 +327,8 @@
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
       "invalid_action_type": "Choose Broadlink IR or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
+      "invalid_button_repeats": "Each button must repeat between 1 and 10 times.",
+      "invalid_interval": "The delay must be between 0 and 10 seconds.",
       "no_commands": "Keep at least one command or one source.",
       "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty.",
       "incomplete_source_order": "Keep every source in the list; only change the order."
@@ -327,13 +341,13 @@
     "action_type": {
       "options": {
         "broadlink": "Broadlink IR (remote.send_command)",
-        "button": "Button entity (button.press)"
+        "button": "Button entities (button.press, in order)"
       }
     },
     "power_mode": {
       "options": {
         "on_off": "Separate power on and power off",
-        "toggle": "Single power toggle key",
+        "toggle": "Single power button (same key for on and off)",
         "skip": "Skip for now"
       }
     },
