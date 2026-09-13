@@ -32,6 +32,8 @@ CONF_BUTTON_ENTITY = "button_entity"
 CONF_DEVICE = "device"
 CONF_COMMAND = "command"
 CONF_NUM_REPEATS = "num_repeats"
+CONF_BUTTON_REPEATS = "button_repeats"
+CONF_INTERVAL = "interval"
 CONF_SOURCE_NAME = "source_name"
 CONF_SOURCE_ORDER = "source_order"
 CONF_REORDER_ACTION = "reorder_action"
@@ -49,6 +51,12 @@ ATTR_COMMAND = "command"
 ATTR_NUM_REPEATS = "num_repeats"
 ATTR_NAME = "name"
 ATTR_ACTION = "action"
+ATTR_BUTTONS = "buttons"
+ATTR_INTERVAL = "interval"
+ATTR_REPEATS = "repeats"
+DEFAULT_BUTTON_INTERVAL = 0.3
+MAX_BUTTON_REPEATS = 10
+MAX_BUTTON_INTERVAL = 10.0
 
 # Command keys (stored in entry.data["commands"])
 CMD_TURN_ON = "turn_on"
