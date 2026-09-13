@@ -22,7 +22,13 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .actions import parse_broadlink_codes_payload, summarize_action
+from .actions import (
+    button_entity_ids,
+    button_press_interval,
+    button_repeat_default,
+    parse_broadlink_codes_payload,
+    summarize_action,
+)
 from .const import (
     ACTION_BROADLINK,
     ACTION_BUTTON,
@@ -33,14 +39,17 @@ from .const import (
     ATTR_TYPE,
     CONF_ACTION_TYPE,
     CONF_BUTTON_ENTITY,
+    CONF_BUTTON_REPEATS,
     CONF_COMMAND,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
     CONF_DEVICE,
+    CONF_INTERVAL,
     CONF_MANUFACTURER,
     CONF_NAME,
     CONF_REORDER_ACTION,
     CONF_SOURCE_ORDER,
+    DEFAULT_BUTTON_INTERVAL,
     DEFAULT_MANUFACTURER,
     REORDER_ACTION_APPLY,
     REORDER_ACTION_BACK,
@@ -101,6 +110,51 @@ def entity_dropdown(
             sort=False,
         )
     )
+
+
+def entity_multi_dropdown(
+    hass: HomeAssistant,
+    domain: str,
+    *,
+    current: list[str] | None = None,
+) -> SelectSelector | TextSelector:
+    """Multi-select of entities; drag to set press order when reorder is available."""
+    current_ids = [item for item in (current or []) if isinstance(item, str) and item]
+    entity_ids = list(hass.states.async_entity_ids(domain))
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for entity_id in current_ids + entity_ids:
+        if entity_id in seen:
+            continue
+        options.append(
+            {
+                "value": entity_id,
+                "label": _state_label(hass.states.get(entity_id), entity_id),
+            }
+        )
+        seen.add(entity_id)
+    if not options:
+        return _text()
+    config: dict[str, Any] = {
+        "options": options,
+        "multiple": True,
+        "custom_value": False,
+        "sort": False,
+        "reorder": True,
+        "mode": SelectSelectorMode.LIST,
+    }
+    try:
+        selector = SelectSelector(config)
+    except (vol.Invalid, TypeError, ValueError):
+        fallback = dict(config)
+        fallback.pop("reorder", None)
+        selector = SelectSelector(fallback)
+    raw = getattr(selector, "config", None)
+    if isinstance(raw, dict):
+        raw["reorder"] = True
+        raw["multiple"] = True
+        raw["sort"] = False
+    return selector
 
 
 def learned_broadlink_names(hass: HomeAssistant) -> tuple[list[str], list[str]]:
@@ -238,13 +292,13 @@ def power_sensor_schema(
     return vol.Schema(schema)
 
 
-def power_mode_schema(default: str = POWER_MODE_ON_OFF) -> vol.Schema:
+def power_mode_schema(default: str = POWER_MODE_TOGGLE) -> vol.Schema:
     """Choose how power is mapped."""
     return vol.Schema(
         {
             vol.Required("power_mode", default=default): SelectSelector(
                 SelectSelectorConfig(
-                    options=[POWER_MODE_ON_OFF, POWER_MODE_TOGGLE, POWER_MODE_SKIP],
+                    options=[POWER_MODE_TOGGLE, POWER_MODE_ON_OFF, POWER_MODE_SKIP],
                     mode=SelectSelectorMode.LIST,
                     translation_key="power_mode",
                 )
@@ -314,10 +368,16 @@ def action_schema(
     suggested_command = ""
     if existing.get(ATTR_TYPE) == ACTION_BROADLINK:
         suggested_command = existing.get(ATTR_COMMAND) or ""
-    suggested_button = (
-        existing.get(ATTR_ENTITY_ID) if existing.get(ATTR_TYPE) == ACTION_BUTTON else None
+    suggested_buttons = (
+        button_entity_ids(existing) if existing.get(ATTR_TYPE) == ACTION_BUTTON else []
     )
     suggested_repeats = existing.get(ATTR_NUM_REPEATS, 1)
+    suggested_button_repeats = button_repeat_default(existing)
+    suggested_interval = (
+        button_press_interval(existing)
+        if existing.get(ATTR_TYPE) == ACTION_BUTTON
+        else DEFAULT_BUTTON_INTERVAL
+    )
 
     devices, commands = learned_broadlink_names(hass)
     if suggested_device:
@@ -371,14 +431,34 @@ def action_schema(
             mode=NumberSelectorMode.BOX,
         )
     )
-    if suggested_button:
-        schema[vol.Optional(CONF_BUTTON_ENTITY, default=suggested_button)] = entity_dropdown(
-            hass, "button", current=suggested_button
+    if suggested_buttons:
+        schema[vol.Optional(CONF_BUTTON_ENTITY, default=suggested_buttons)] = (
+            entity_multi_dropdown(hass, "button", current=suggested_buttons)
         )
     else:
-        schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_dropdown(
-            hass, "button", current=suggested_button
+        schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_multi_dropdown(
+            hass, "button", current=suggested_buttons
         )
+    schema[
+        vol.Optional(CONF_BUTTON_REPEATS, default=suggested_button_repeats)
+    ] = NumberSelector(
+        NumberSelectorConfig(
+            min=1,
+            max=10,
+            step=1,
+            mode=NumberSelectorMode.BOX,
+        )
+    )
+    schema[
+        vol.Optional(CONF_INTERVAL, default=suggested_interval)
+    ] = NumberSelector(
+        NumberSelectorConfig(
+            min=0,
+            max=10,
+            step=0.1,
+            mode=NumberSelectorMode.BOX,
+        )
+    )
     return vol.Schema(schema)
 
 
