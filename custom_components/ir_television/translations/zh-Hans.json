@@ -27,7 +27,7 @@
       },
       "power_mode": {
         "title": "电源",
-        "description": "多数电视是独立的开/关机键，或只有一个电源切换键。当前映射：\n{current}",
+        "description": "实体行和控制中心都是一个电源按钮。新添加的电视默认用同一个键开关机。当前映射：\n{current}",
         "data": {
           "power_mode": "电源按键"
         }
@@ -46,20 +46,24 @@
       },
       "command": {
         "title": "映射：{command}",
-        "description": "正在配置 **{command}**（`{command_key}`）。\n\n• Broadlink：从下拉列表选择 `remote.*` 实体（或使用默认值），再选择/填写 Broadlink 设备名和已学习的指令名。\n• 按钮：从下拉列表选择一个 `button.*` 实体。",
+        "description": "正在配置 **{command}**（`{command_key}`）。\n\n• Broadlink：从下拉列表选择 `remote.*` 实体（或使用默认值），再选择/填写 Broadlink 设备名和已学习的指令名。\n• 按钮：可多选 `button.*`，按顺序执行；可设置每个按钮重复次数和按键间隔。",
         "data": {
           "action_type": "控制方式",
           "remote_entity": "Broadlink / 遥控器实体",
           "device": "Broadlink 设备名",
           "command": "已学习的指令名",
           "num_repeats": "红外重复次数",
-          "button_entity": "按钮实体"
+          "button_entity": "按钮",
+          "button_repeats": "每个按钮重复次数",
+          "interval": "每次按键间隔（秒）"
         },
         "data_description": {
           "remote_entity": "使用 Broadlink 时必填（除非已设置默认遥控器）。从下拉列表选择可用的遥控器实体。",
           "device": "官方 Broadlink 集成通常需要填写。",
           "command": "学习红外时你起的名字，例如 `power_on`。",
-          "button_entity": "控制方式为按钮时必填。"
+          "button_entity": "控制方式为按钮时必填。可多选 `button.*`，按列表顺序执行（可拖拽排序）。",
+          "button_repeats": "每个所选按钮连续按这么多次，再执行下一个。",
+          "interval": "每次 button.press（含重复）之间等待的秒数。"
         }
       },
       "volume_select": {
@@ -106,14 +110,16 @@
       },
       "source_action": {
         "title": "输入源动作：{source_name}",
-        "description": "选择 **{source_name}** 时要发送什么？",
+        "description": "选择 **{source_name}** 时要发送什么？控制方式为按钮时可多选，按顺序执行。",
         "data": {
           "action_type": "控制方式",
           "remote_entity": "Broadlink / 遥控器实体",
           "device": "Broadlink 设备名",
           "command": "已学习的指令名",
           "num_repeats": "红外重复次数",
-          "button_entity": "按钮实体"
+          "button_entity": "按钮",
+          "button_repeats": "每个按钮重复次数",
+          "interval": "每次按键间隔（秒）"
         }
       }
     },
@@ -126,6 +132,8 @@
       "invalid_entity": "该实体不是预期的 remote 或 button 域。",
       "invalid_action_type": "请选择 Broadlink 红外或按钮。",
       "invalid_repeats": "重复次数必须是 1 到 10 之间的整数。",
+      "invalid_button_repeats": "每个按钮的重复次数必须是 1 到 10。",
+      "invalid_interval": "按键间隔必须是 0 到 10 秒。",
       "no_commands": "完成前请至少配置一条指令或一个输入源。",
       "invalid_power_sensor": "请选择 binary_sensor 实体，或不填此项。"
     },
@@ -197,7 +205,9 @@
           "device": "Broadlink 设备名",
           "command": "已学习的指令名",
           "num_repeats": "红外重复次数",
-          "button_entity": "按钮实体"
+          "button_entity": "按钮",
+          "button_repeats": "每个按钮重复次数",
+          "interval": "每次按键间隔（秒）"
         }
       },
       "volume": {
@@ -261,14 +271,16 @@
       },
       "source_action": {
         "title": "输入源动作：{source_name}",
-        "description": "选择 **{source_name}** 时发送的指令。",
+        "description": "选择 **{source_name}** 时发送的指令。按钮可多选按顺序执行，并可设置重复次数和间隔。",
         "data": {
           "action_type": "控制方式",
           "remote_entity": "Broadlink / 遥控器实体",
           "device": "Broadlink 设备名",
           "command": "已学习的指令名",
           "num_repeats": "红外重复次数",
-          "button_entity": "按钮实体"
+          "button_entity": "按钮",
+          "button_repeats": "每个按钮重复次数",
+          "interval": "每次按键间隔（秒）"
         }
       },
       "source_edit": {
@@ -315,6 +327,8 @@
       "invalid_entity": "该实体不是预期的 remote 或 button 域。",
       "invalid_action_type": "请选择 Broadlink 红外或按钮。",
       "invalid_repeats": "重复次数必须是 1 到 10 之间的整数。",
+      "invalid_button_repeats": "每个按钮的重复次数必须是 1 到 10。",
+      "invalid_interval": "按键间隔必须是 0 到 10 秒。",
       "no_commands": "请至少保留一条指令或一个输入源。",
       "invalid_power_sensor": "请选择 binary_sensor 实体，或不填此项。",
       "incomplete_source_order": "请保留全部输入源，只调整先后顺序。"
@@ -327,13 +341,13 @@
     "action_type": {
       "options": {
         "broadlink": "Broadlink 红外（remote.send_command）",
-        "button": "按钮实体（button.press）"
+        "button": "按钮实体（可多选，按顺序 button.press）"
       }
     },
     "power_mode": {
       "options": {
         "on_off": "独立的开机和关机",
-        "toggle": "单个电源切换键",
+        "toggle": "单个电源键（开/关同一按键）",
         "skip": "暂时跳过"
       }
     },
