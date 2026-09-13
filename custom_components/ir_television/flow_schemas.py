@@ -39,10 +39,11 @@ from .const import (
     CONF_DEVICE,
     CONF_MANUFACTURER,
     CONF_NAME,
-    CONF_SOURCE_MOVE,
+    CONF_REORDER_ACTION,
+    CONF_SOURCE_ORDER,
     DEFAULT_MANUFACTURER,
-    SOURCE_MOVE_DOWN,
-    SOURCE_MOVE_UP,
+    REORDER_ACTION_APPLY,
+    REORDER_ACTION_BACK,
     CONF_NUM_REPEATS,
     CONF_POWER_SENSOR,
     CONF_POWER_SENSOR_INVERT,
@@ -149,22 +150,44 @@ def name_schema(
     )
 
 
+def _source_order_selector(names: list[str]) -> SelectSelector:
+    """List every source and enable the frontend drag handle when available."""
+    config: dict[str, Any] = {
+        "options": list(names),
+        "multiple": True,
+        "custom_value": False,
+        "sort": False,
+        "reorder": True,
+    }
+    try:
+        selector = SelectSelector(config)
+    except (vol.Invalid, TypeError, ValueError):
+        fallback = dict(config)
+        fallback.pop("reorder", None)
+        selector = SelectSelector(fallback)
+    raw = getattr(selector, "config", None)
+    if isinstance(raw, dict):
+        raw["reorder"] = True
+        raw["multiple"] = True
+        raw["sort"] = False
+    return selector
+
+
 def source_reorder_schema(names: list[str]) -> vol.Schema:
-    """Pick a source and move it up or down in the advertised list."""
+    """Show the full source list for drag-and-drop reorder, plus a back action."""
     return vol.Schema(
         {
-            vol.Required("source"): SelectSelector(
+            vol.Required(
+                CONF_REORDER_ACTION, default=REORDER_ACTION_APPLY
+            ): SelectSelector(
                 SelectSelectorConfig(
-                    options=names,
-                    mode=SelectSelectorMode.DROPDOWN,
+                    options=[REORDER_ACTION_BACK, REORDER_ACTION_APPLY],
+                    mode=SelectSelectorMode.LIST,
+                    translation_key="reorder_action",
                 )
             ),
-            vol.Required(CONF_SOURCE_MOVE, default=SOURCE_MOVE_UP): SelectSelector(
-                SelectSelectorConfig(
-                    options=[SOURCE_MOVE_UP, SOURCE_MOVE_DOWN],
-                    mode=SelectSelectorMode.LIST,
-                    translation_key="source_move",
-                )
+            vol.Required(CONF_SOURCE_ORDER, default=list(names)): _source_order_selector(
+                names
             ),
         }
     )
