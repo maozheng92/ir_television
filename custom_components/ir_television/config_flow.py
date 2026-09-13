@@ -145,7 +145,9 @@ class TelevisionFlowMixin:
             self._data[CONF_DEFAULT_DEVICE] = device
             if self._options_mode:
                 return await self.async_step_init()
-            return await self.async_step_power_mode()
+            # One power key on the entity row (turn on / turn off share it).
+            self._queue_commands([CMD_POWER_TOGGLE], "power_sensor")
+            return await self.async_step_command()
 
         return self.async_show_form(
             step_id="defaults",
@@ -162,7 +164,7 @@ class TelevisionFlowMixin:
         elif commands.get(CMD_TURN_ON) or commands.get(CMD_TURN_OFF):
             current = POWER_MODE_ON_OFF
         else:
-            current = POWER_MODE_SKIP if self._options_mode else POWER_MODE_ON_OFF
+            current = POWER_MODE_SKIP if self._options_mode else POWER_MODE_TOGGLE
 
         if user_input is not None:
             mode = user_input["power_mode"]
