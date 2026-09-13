@@ -12,6 +12,8 @@
 - 可选 `binary_sensor` 作为电源状态回读
 - 自带集成图标（`brand/` + 仓库根目录 `icon.png`）
 
-安装：把 `custom_components/ir_television/` **整个文件夹**复制到 Home Assistant 配置目录（必须包含 `translations/en.json`，不能是空文件），**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。若向导报 `en.json` 空文档，删掉该目录后重新完整拷贝。
+仓库：https://github.com/maozheng92/ir_television  
+
+安装：把 `custom_components/ir_television/` **整个文件夹**复制到 Home Assistant 配置目录（必须包含 `translations/en.json`，不能是空文件），**重启**，再在 **设置 → 设备与服务 → 添加集成** 中搜索 **红外电视**。HACS 把上述仓库加为 Integration 自定义仓库即可。若向导报 `en.json` 空文档，删掉该目录后重新完整拷贝。
 
 索尼没有 AirPlay / 原厂 HomeKit：官方路径是 **Bravia 集成 → HomeKit 桥接 → HA 为电视拆出配件**。点设备上的 **按索尼方式接入 HomeKit**，把 `media_player` 加进**同一座桥**并拆出配件（不会删主桥）。家庭 App 扫配件码，不要扫主桥。
