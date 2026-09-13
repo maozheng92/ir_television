@@ -406,4 +406,683 @@ def build_bridge_filter_including(
     the domain is not in ``include_domains``. Also drops the entity from
     ``exclude_entities`` so a previous exclude cannot hide it.
     """
-    new_moms = dict(filt or {})
+    new_filt = dict(filt or {})
+    include_entities = [str(item) for item in (new_filt.get(HOMEKIT_INCLUDE_ENTITIES) or [])]
+    exclude_entities = [str(item) for item in (new_filt.get(HOMEKIT_EXCLUDE_ENTITIES) or [])]
+    if entity_id not in include_entities:
+        include_entities.append(entity_id)
+    exclude_entities = [item for item in exclude_entities if item != entity_id]
+    new_filt[HOMEKIT_INCLUDE_ENTITIES] = include_entities
+    new_filt[HOMEKIT_EXCLUDE_ENTITIES] = exclude_entities
+    return new_filt
+
+
+def homekit_accessory_entity_ids(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> set[str]:
+    """Return entity ids already exposed as HomeKit accessory-mode TVs.
+
+    Each item is ``(entry.data, entry.options)``. HomeKit stores mode/filter on
+    data for accessory-source entries, and on options after some UI edits.
+    """
+    entity_ids: set[str] = set()
+    for data, options in entries:
+        mode = options.get(HOMEKIT_MODE, data.get(HOMEKIT_MODE))
+        if mode != HOMEKIT_MODE_ACCESSORY:
+            continue
+        filt = options.get(HOMEKIT_FILTER) or data.get(HOMEKIT_FILTER) or {}
+        include = filt.get(HOMEKIT_INCLUDE_ENTITIES) or []
+        if include:
+            entity_ids.add(str(include[0]))
+    return entity_ids
+
+
+def collect_homekit_ports(entries: list[tuple[dict[str, Any], dict[str, Any]]]) -> set[int]:
+    """Ports already used by HomeKit config entries."""
+    ports: set[int] = set()
+    for data, options in entries:
+        for blob in (options, data):
+            port = blob.get(HOMEKIT_PORT)
+            if port is None:
+                continue
+            try:
+                ports.add(int(port))
+            except (TypeError, ValueError):
+                continue
+    return ports
+
+
+def next_homekit_port(
+    used_ports: set[int], start: int = HOMEKIT_DEFAULT_BRIDGE_PORT + 1
+) -> int:
+    """Pick the next free HomeKit TCP port (default bridge uses 21063)."""
+    port = start
+    while port in used_ports:
+        port += 1
+    return port
+
+
+def resolve_command_key(commands: dict[str, Any] | None, intent: str) -> str | None:
+    """Map a high-level media_player intent to a configured command key."""
+    commands = commands or {}
+
+    if intent == INTENT_TURN_ON:
+        if _has_action(commands, CMD_TURN_ON):
+            return CMD_TURN_ON
+        if _has_action(commands, CMD_POWER_TOGGLE):
+            return CMD_POWER_TOGGLE
+        return None
+
+    if intent == INTENT_TURN_OFF:
+        if _has_action(commands, CMD_TURN_OFF):
+            return CMD_TURN_OFF
+        if _has_action(commands, CMD_POWER_TOGGLE):
+            return CMD_POWER_TOGGLE
+        return None
+
+    if intent == INTENT_TOGGLE:
+        if _has_action(commands, CMD_POWER_TOGGLE):
+            return CMD_POWER_TOGGLE
+        return None  # caller should dispatch to on/off using assumed state
+
+    if intent == INTENT_PLAY:
+        if _has_action(commands, CMD_PLAY):
+            return CMD_PLAY
+        if _has_action(commands, CMD_PLAY_PAUSE):
+            return CMD_PLAY_PAUSE
+        return None
+
+    if intent == INTENT_PAUSE:
+        if _has_action(commands, CMD_PAUSE):
+            return CMD_PAUSE
+        if _has_action(commands, CMD_PLAY_PAUSE):
+            return CMD_PLAY_PAUSE
+        return None
+
+    if intent == INTENT_PLAY_PAUSE:
+        if _has_action(commands, CMD_PLAY_PAUSE):
+            return CMD_PLAY_PAUSE
+        return None
+
+    if intent == INTENT_STOP:
+        return CMD_STOP if _has_action(commands, CMD_STOP) else None
+
+    if intent == INTENT_VOLUME_UP:
+        return CMD_VOLUME_UP if _has_action(commands, CMD_VOLUME_UP) else None
+
+    if intent == INTENT_VOLUME_DOWN:
+        return CMD_VOLUME_DOWN if _has_action(commands, CMD_VOLUME_DOWN) else None
+
+    if intent == INTENT_VOLUME_MUTE:
+        return CMD_VOLUME_MUTE if _has_action(commands, CMD_VOLUME_MUTE) else None
+
+    if intent == INTENT_NEXT:
+        return INTENT_NEXT if _has_action(commands, INTENT_NEXT) else None
+
+    if intent == INTENT_PREVIOUS:
+        return INTENT_PREVIOUS if _has_action(commands, INTENT_PREVIOUS) else None
+
+    if _has_action(commands, intent):
+        return intent
+    return None
+
+
+def resolve_power_press_key(
+    commands: dict[str, Any] | None, *, is_on: bool
+) -> str | None:
+    """Command for the single power button given the current TV power.
+
+    Separate on/off mappings still appear as one control: send off when the
+    TV is on, send on when it is off. A lone power-toggle mapping is used
+    only when the matching dedicated key is missing.
+    """
+    commands = commands or {}
+    if is_on:
+        if _has_action(commands, CMD_TURN_OFF):
+            return CMD_TURN_OFF
+        if _has_action(commands, CMD_POWER_TOGGLE):
+            return CMD_POWER_TOGGLE
+        return None
+    if _has_action(commands, CMD_TURN_ON):
+        return CMD_TURN_ON
+    if _has_action(commands, CMD_POWER_TOGGLE):
+        return CMD_POWER_TOGGLE
+    return None
+
+
+# HomeKit Television REMOTE_KEYS → stored command keys (see homekit/const.py).
+# Fallbacks are applied in resolve_homekit_remote_key.
+HOMEKIT_REMOTE_KEY_COMMANDS: dict[str, str] = {
+    "arrow_up": CMD_UP,
+    "arrow_down": CMD_DOWN,
+    "arrow_left": CMD_LEFT,
+    "arrow_right": CMD_RIGHT,
+    "select": CMD_OK,
+    "back": CMD_BACK,
+    "information": CMD_INFO,
+    "next_track": INTENT_NEXT,
+    "previous_track": INTENT_PREVIOUS,
+}
+
+
+def resolve_homekit_remote_key(
+    commands: dict[str, Any] | None, key_name: str | None
+) -> str | None:
+    """Map a HomeKit ``key_name`` to a configured IR/button command key.
+
+    HomeKit fires ``homekit_tv_remote_key_pressed`` with names such as
+    ``arrow_up``, ``select``, ``exit``, ``play_pause``. Returns the stored
+    command key to send, or None if nothing is mapped.
+
+    Fallbacks:
+    - play_pause → play, then pause
+    - exit / home → home, then back
+    - rewind → previous_track, then left
+    - fast_forward → next_track, then right
+    """
+    commands = commands or {}
+    key = (key_name or "").strip().lower()
+    if not key:
+        return None
+
+    if key == "play_pause":
+        for candidate in (CMD_PLAY_PAUSE, CMD_PLAY, CMD_PAUSE):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    if key in ("exit", "home"):
+        for candidate in (CMD_HOME, CMD_BACK):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    if key == "rewind":
+        for candidate in (INTENT_PREVIOUS, CMD_LEFT):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    if key == "fast_forward":
+        for candidate in (INTENT_NEXT, CMD_RIGHT):
+            if _has_action(commands, candidate):
+                return candidate
+        return None
+
+    mapped = HOMEKIT_REMOTE_KEY_COMMANDS.get(key)
+    if mapped and _has_action(commands, mapped):
+        return mapped
+    # remote.send_command("up") / stored IR key names, not only HomeKit names
+    if _has_action(commands, key):
+        return key
+    return None
+
+
+def normalize_source_name(name: str | None) -> str:
+    """Strip surrounding whitespace from a source name."""
+    return (name or "").strip()
+
+
+def validate_source_name(
+    name: str | None,
+    sources: list[SourceDict] | None,
+    exclude_index: int | None = None,
+) -> str | None:
+    """Return an error key if the source name is invalid, else None."""
+    cleaned = normalize_source_name(name)
+    if not cleaned:
+        return "empty_name"
+    sources = sources or []
+    for idx, source in enumerate(sources):
+        if exclude_index is not None and idx == exclude_index:
+            continue
+        existing = normalize_source_name(str(source.get(ATTR_NAME, "")))
+        if existing.lower() == cleaned.lower():
+            return "duplicate_source"
+    return None
+
+
+def _configured_source_names(sources: list[Any] | None) -> list[str]:
+    """Return display names the user actually configured (may be empty)."""
+    names: list[str] = []
+    for source in sources or []:
+        if not isinstance(source, dict):
+            continue
+        name = normalize_source_name(str(source.get(ATTR_NAME, "")))
+        if name:
+            names.append(name)
+    return names
+
+
+def build_source_list(sources: list[Any] | None) -> list[str]:
+    """Return display names for sources.
+
+    Always includes at least ``DEFAULT_SOURCE_NAME`` ("TV") so HomeKit can
+    create Input Source services even when the user added none.
+    """
+    return _configured_source_names(sources) or [DEFAULT_SOURCE_NAME]
+
+
+def current_source_name(source: str | None, sources: list[Any] | None) -> str | None:
+    """Return a source that always exists in ``source_list``.
+
+    HomeKit CHAR_ACTIVE_IDENTIFIER must match an Input Source. If the stored
+    current source is missing, fall back to the first advertised name.
+    """
+    names = build_source_list(sources)
+    if not names:
+        return None
+    target = normalize_source_name(source).lower()
+    if target:
+        for name in names:
+            if name.lower() == target:
+                return name
+    return names[0]
+
+
+def find_source(sources: list[SourceDict] | None, name: str) -> SourceDict | None:
+    """Find a source by display name (case-insensitive)."""
+    target = normalize_source_name(name).lower()
+    if not target:
+        return None
+    for source in sources or []:
+        if normalize_source_name(str(source.get(ATTR_NAME, ""))).lower() == target:
+            return source
+    return None
+
+
+def has_useful_config(commands: dict[str, Any] | None, sources: list[Any] | None) -> bool:
+    """True if at least one command or user-configured source is set.
+
+    The implicit default "TV" source does not count — the user must still
+    map at least one IR/button command or a real HDMI/app source.
+    """
+    commands = commands or {}
+    if any(_has_action(commands, key) for key in commands):
+        return True
+    return bool(_configured_source_names(sources))
+
+
+def parse_button_entity_input(raw: Any) -> list[str]:
+    """Accept one entity id, a list, or a comma-separated string."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        parts = [part.strip() for part in raw.replace(";", ",").split(",")]
+        return [part for part in parts if part]
+    if isinstance(raw, (list, tuple)):
+        ids: list[str] = []
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                ids.append(item.strip())
+        return ids
+    return []
+
+
+def button_entity_ids(action: dict[str, Any] | None) -> list[str]:
+    """Return configured button entity ids in press order (no repeats)."""
+    if not isinstance(action, dict):
+        return []
+    buttons = action.get(ATTR_BUTTONS)
+    if isinstance(buttons, list) and buttons:
+        ids: list[str] = []
+        for item in buttons:
+            entity_id = None
+            if isinstance(item, str):
+                entity_id = item.strip()
+            elif isinstance(item, dict):
+                raw = item.get(ATTR_ENTITY_ID)
+                if isinstance(raw, str):
+                    entity_id = raw.strip()
+            if entity_id and entity_id.startswith("button.") and entity_id not in ids:
+                ids.append(entity_id)
+            elif entity_id and entity_id.startswith("button."):
+                ids.append(entity_id)
+        return ids
+    entity_id = action.get(ATTR_ENTITY_ID)
+    if isinstance(entity_id, str) and entity_id.startswith("button."):
+        return [entity_id]
+    return []
+
+
+def _button_repeats(item: Any, fallback: int = 1) -> int:
+    raw = fallback
+    if isinstance(item, dict):
+        if item.get(ATTR_REPEATS) is not None:
+            raw = item.get(ATTR_REPEATS)
+        elif item.get(ATTR_NUM_REPEATS) is not None:
+            raw = item.get(ATTR_NUM_REPEATS)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = fallback
+    return max(1, min(value, MAX_BUTTON_REPEATS))
+
+
+def button_repeat_default(action: dict[str, Any] | None) -> int:
+    """Repeats to prefill when every stored button uses the same count."""
+    if not isinstance(action, dict):
+        return 1
+    buttons = action.get(ATTR_BUTTONS)
+    if isinstance(buttons, list) and buttons:
+        counts = {_button_repeats(item, 1) for item in buttons}
+        if len(counts) == 1:
+            return counts.pop()
+        return 1
+    return _button_repeats(action, 1)
+
+
+def expand_button_presses(action: dict[str, Any] | None) -> list[str]:
+    """Entity ids in the order they should be pressed (repeats expanded)."""
+    if not isinstance(action, dict):
+        return []
+    buttons = action.get(ATTR_BUTTONS)
+    fallback = _button_repeats(action, 1)
+    if isinstance(buttons, list) and buttons:
+        presses: list[str] = []
+        for item in buttons:
+            entity_id = None
+            repeats = fallback
+            if isinstance(item, str):
+                entity_id = item.strip()
+            elif isinstance(item, dict):
+                raw = item.get(ATTR_ENTITY_ID)
+                if isinstance(raw, str):
+                    entity_id = raw.strip()
+                repeats = _button_repeats(item, fallback)
+            if not entity_id or not entity_id.startswith("button."):
+                continue
+            presses.extend([entity_id] * repeats)
+        return presses
+    entity_id = action.get(ATTR_ENTITY_ID)
+    if isinstance(entity_id, str) and entity_id.startswith("button."):
+        return [entity_id] * fallback
+    return []
+
+
+def button_press_interval(action: dict[str, Any] | None) -> float:
+    """Seconds to wait between button.press calls.
+
+    Missing interval (legacy single-button mappings) means no delay.
+    """
+    if not isinstance(action, dict):
+        return 0.0
+    raw = action.get(ATTR_INTERVAL)
+    if raw is None or raw == "":
+        return 0.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(value, MAX_BUTTON_INTERVAL))
+
+
+def parse_interval_input(raw: Any) -> tuple[float | None, str | None]:
+    """Validate a form interval (seconds). Empty uses the default."""
+    if raw is None or raw == "":
+        return DEFAULT_BUTTON_INTERVAL, None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None, "invalid_interval"
+    if value < 0 or value > MAX_BUTTON_INTERVAL:
+        return None, "invalid_interval"
+    return value, None
+
+
+def parse_button_repeats_input(raw: Any) -> tuple[int | None, str | None]:
+    """Validate per-button press count."""
+    if raw is None or raw == "":
+        return 1, None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None, "invalid_button_repeats"
+    if value < 1 or value > MAX_BUTTON_REPEATS:
+        return None, "invalid_button_repeats"
+    return value, None
+
+
+def copy_action(action: Any) -> dict[str, Any]:
+    """Copy a stored command / source action, including button sequences."""
+    if not isinstance(action, dict):
+        return {}
+    copied = dict(action)
+    buttons = copied.get(ATTR_BUTTONS)
+    if isinstance(buttons, list):
+        copied[ATTR_BUTTONS] = [
+            dict(item) if isinstance(item, dict) else item for item in buttons
+        ]
+    return copied
+
+
+def action_is_valid(action: Any) -> bool:
+    """Return True if an action payload can be sent."""
+    if not isinstance(action, dict):
+        return False
+    action_type = action.get(ATTR_TYPE)
+    if action_type == ACTION_BROADLINK:
+        entity_id = action.get(ATTR_ENTITY_ID)
+        if not entity_id or not isinstance(entity_id, str):
+            return False
+        if not entity_id.startswith("remote."):
+            return False
+        command = action.get(ATTR_COMMAND)
+        return bool(isinstance(command, str) and command.strip())
+    if action_type == ACTION_BUTTON:
+        return bool(expand_button_presses(action))
+    return False
+
+
+def parse_action_input(
+    user_input: dict[str, Any],
+    defaults: dict[str, Any] | None = None,
+) -> tuple[ActionDict | None, str | None]:
+    """Parse a config-flow form into a stored action.
+
+    Returns (action, error_key). error_key is set on validation failure.
+    """
+    defaults = defaults or {}
+    action_type = user_input.get(CONF_ACTION_TYPE)
+
+    if action_type == ACTION_BROADLINK:
+        entity_id = user_input.get(CONF_REMOTE_ENTITY) or defaults.get(CONF_DEFAULT_REMOTE)
+        command = str(user_input.get(CONF_COMMAND) or "").strip()
+        device = str(user_input.get(CONF_DEVICE) or "").strip() or defaults.get(
+            CONF_DEFAULT_DEVICE
+        )
+        if isinstance(device, str):
+            device = device.strip() or None
+        else:
+            device = None
+
+        if not entity_id:
+            return None, "missing_remote"
+        if not isinstance(entity_id, str) or not entity_id.startswith("remote."):
+            return None, "invalid_entity"
+        if not command:
+            return None, "missing_command"
+
+        action: ActionDict = {
+            ATTR_TYPE: ACTION_BROADLINK,
+            ATTR_ENTITY_ID: entity_id,
+            ATTR_COMMAND: command,
+        }
+        if device:
+            action[ATTR_DEVICE] = device
+        repeats = user_input.get(CONF_NUM_REPEATS)
+        if repeats is not None:
+            try:
+                repeats_int = int(repeats)
+            except (TypeError, ValueError):
+                return None, "invalid_repeats"
+            if repeats_int < 1 or repeats_int > 10:
+                return None, "invalid_repeats"
+            if repeats_int != 1:
+                action[ATTR_NUM_REPEATS] = repeats_int
+        return action, None
+
+    if action_type == ACTION_BUTTON:
+        ids = parse_button_entity_input(user_input.get(CONF_BUTTON_ENTITY))
+        if not ids:
+            return None, "missing_button"
+        if any(not entity_id.startswith("button.") for entity_id in ids):
+            return None, "invalid_entity"
+        repeats, error = parse_button_repeats_input(user_input.get(CONF_BUTTON_REPEATS))
+        if error:
+            return None, error
+        interval, error = parse_interval_input(user_input.get(CONF_INTERVAL))
+        if error:
+            return None, error
+        assert repeats is not None and interval is not None
+        action = {
+            ATTR_TYPE: ACTION_BUTTON,
+            ATTR_ENTITY_ID: ids[0],
+            ATTR_BUTTONS: [
+                {ATTR_ENTITY_ID: entity_id, ATTR_REPEATS: repeats} for entity_id in ids
+            ],
+            ATTR_INTERVAL: interval,
+        }
+        if repeats != 1:
+            action[ATTR_NUM_REPEATS] = repeats
+        return action, None
+
+    return None, "invalid_action_type"
+
+
+def build_remote_service_data(action: ActionDict) -> dict[str, Any]:
+    """Build remote.send_command service data from a Broadlink action."""
+    data: dict[str, Any] = {
+        "entity_id": action[ATTR_ENTITY_ID],
+        "command": action[ATTR_COMMAND],
+        "num_repeats": int(action.get(ATTR_NUM_REPEATS, 1)),
+    }
+    device = action.get(ATTR_DEVICE)
+    if device:
+        data["device"] = device
+    return data
+
+
+def build_button_service_data(action: ActionDict) -> dict[str, Any]:
+    """Build button.press service data from a button action."""
+    return {"entity_id": action[ATTR_ENTITY_ID]}
+
+
+def summarize_action(action: ActionDict | None) -> str:
+    """Short human-readable summary used in options descriptions."""
+    if not action_is_valid(action):
+        return "—"
+    assert action is not None
+    if action[ATTR_TYPE] == ACTION_BUTTON:
+        buttons = action.get(ATTR_BUTTONS)
+        fallback = _button_repeats(action, 1)
+        parts: list[str] = []
+        if isinstance(buttons, list) and buttons:
+            for item in buttons:
+                if isinstance(item, str):
+                    entity_id, repeats = item, fallback
+                elif isinstance(item, dict):
+                    entity_id = str(item.get(ATTR_ENTITY_ID) or "")
+                    repeats = _button_repeats(item, fallback)
+                else:
+                    continue
+                if not entity_id:
+                    continue
+                parts.append(entity_id if repeats == 1 else f"{entity_id}×{repeats}")
+        if not parts:
+            parts.append(str(action.get(ATTR_ENTITY_ID) or ""))
+        summary = " → ".join(parts)
+        interval = button_press_interval(action)
+        if interval and len(expand_button_presses(action)) > 1:
+            summary = f"{summary} ({interval:g}s)"
+        return f"button:{summary}"
+    device = action.get(ATTR_DEVICE)
+    suffix = f" / {device}" if device else ""
+    return f"ir:{action[ATTR_ENTITY_ID]}{suffix} → {action[ATTR_COMMAND]}"
+
+
+def copy_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Deep-ish copy of integration config stored on the config entry."""
+    commands = data.get("commands") or {}
+    sources = data.get("sources") or []
+    sensor = data.get(CONF_POWER_SENSOR) or None
+    if isinstance(sensor, str):
+        sensor = sensor.strip() or None
+    else:
+        sensor = None
+    return {
+        "name": data.get("name", ""),
+        "commands": {key: copy_action(value) for key, value in commands.items() if value},
+        "sources": [
+            {
+                ATTR_NAME: src.get(ATTR_NAME, ""),
+                ATTR_ACTION: copy_action(src.get(ATTR_ACTION)),
+            }
+            for src in sources
+            if isinstance(src, dict)
+        ],
+        CONF_DEFAULT_REMOTE: data.get(CONF_DEFAULT_REMOTE),
+        CONF_DEFAULT_DEVICE: data.get(CONF_DEFAULT_DEVICE),
+        CONF_POWER_SENSOR: sensor,
+        CONF_POWER_SENSOR_INVERT: bool(data.get(CONF_POWER_SENSOR_INVERT)),
+        CONF_MANUFACTURER: resolve_manufacturer(data),
+    }
+
+
+_SENSOR_ON = "on"
+_SENSOR_OFF = "off"
+_SENSOR_UNKNOWN = {"unavailable", "unknown", "none", ""}
+
+
+def power_is_on_from_sensor(state: str | None, *, invert: bool = False) -> bool | None:
+    """Map a binary_sensor state to TV power.
+
+    Returns True/False when the sensor reports a clear on/off, else None
+    (unavailable, unknown, or missing). invert=True means sensor on = TV off.
+    """
+    if state is None:
+        return None
+    value = str(state).strip().lower()
+    if value in _SENSOR_UNKNOWN or value not in (_SENSOR_ON, _SENSOR_OFF):
+        return None
+    is_on = value == _SENSOR_ON
+    return (not is_on) if invert else is_on
+
+
+def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | None]:
+    """Validate an optional binary_sensor entity id.
+
+    Returns (entity_id_or_none, error_key).
+    """
+    if not entity_id:
+        return None, None
+    cleaned = str(entity_id).strip()
+    if not cleaned:
+        return None, None
+    if not cleaned.startswith("binary_sensor."):
+        return None, "invalid_power_sensor"
+    return cleaned, None
+
+
+def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
+    """Extract learned Broadlink device and command names from a codes file.
+
+    Accepts either the storage wrapper ``{\"data\": {...}}`` or the inner mapping
+    ``{device_name: {command_name: code}}``.
+    """
+    devices: set[str] = set()
+    commands: set[str] = set()
+    if not isinstance(payload, dict):
+        return [], []
+    inner = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(inner, dict):
+        return [], []
+    for device_name, cmds in inner.items():
+        name = str(device_name).strip() if device_name is not None else ""
+        if name:
+            devices.add(name)
+        if not isinstance(cmds, dict):
+            continue
+        for command in cmds:
+            cmd = str(command).strip() if command is not None else ""
+            if cmd:
+                commands.add(cmd)
+    return sorted(devices), sorted(commands)
