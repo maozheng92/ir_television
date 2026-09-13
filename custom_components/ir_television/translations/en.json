@@ -331,7 +331,7 @@
       "invalid_interval": "The delay must be between 0 and 10 seconds.",
       "no_commands": "Keep at least one command or one source.",
       "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty.",
-      "incomplete_source_order": "Keep every source aside in the list; only change the order."
+      "incomplete_source_order": "Keep every source in the list; only change the order."
     },
     "abort": {
       "unknown": "Something went wrong."
