@@ -251,7 +251,9 @@ class TelevisionFlowMixin:
         return self.async_show_form(
             step_id="command",
             data_schema=action_schema(
-                self.hass, defaults=self._data, existing=existing
+                self.hass,
+                defaults=self._data,
+                existing=existing,
             ),
             errors=errors,
             description_placeholders={
@@ -444,7 +446,9 @@ class TelevisionFlowMixin:
             existing = self._source_draft.get(ATTR_ACTION)
 
         if user_input is not None:
-            action, error = parse_action_input(user_input, defaults=self._data)
+            action, error = parse_action_input(
+                user_input, defaults=self._data, allow_button_sequence=True
+            )
             if error:
                 errors["base"] = error
             else:
@@ -457,7 +461,10 @@ class TelevisionFlowMixin:
         return self.async_show_form(
             step_id="source_action",
             data_schema=action_schema(
-                self.hass, defaults=self._data, existing=existing
+                self.hass,
+                defaults=self._data,
+                existing=existing,
+                allow_button_sequence=True,
             ),
             errors=errors,
             description_placeholders={"source_name": name},
