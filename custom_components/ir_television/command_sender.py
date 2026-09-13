@@ -1,7 +1,8 @@
-"""Send a configured action via Broadlink remote or a button entity."""
+"""Send a configured action via Broadlink remote or button entities."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -9,10 +10,12 @@ from homeassistant.core import HomeAssistant
 
 from .actions import (
     action_is_valid,
+    button_press_interval,
     build_button_service_data,
     build_remote_service_data,
+    expand_button_presses,
 )
-from .const import ACTION_BROADLINK, ACTION_BUTTON, ATTR_TYPE
+from .const import ACTION_BROADLINK, ACTION_BUTTON, ATTR_ENTITY_ID, ATTR_TYPE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,12 +43,19 @@ async def async_send_action(
             )
             return True
         if action_type == ACTION_BUTTON:
-            await hass.services.async_call(
-                "button",
-                "press",
-                build_button_service_data(action),
-                blocking=True,
-            )
+            presses = expand_button_presses(action)
+            interval = button_press_interval(action)
+            for index, entity_id in enumerate(presses):
+                await hass.services.async_call(
+                    "button",
+                    "press",
+                    build_button_service_data(
+                        {ATTR_TYPE: ACTION_BUTTON, ATTR_ENTITY_ID: entity_id}
+                    ),
+                    blocking=True,
+                )
+                if index < len(presses) - 1 and interval > 0:
+                    await asyncio.sleep(interval)
             return True
     except Exception as err:  # noqa: BLE001 — IR backends fail often; never crash
         _LOGGER.warning(

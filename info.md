@@ -5,7 +5,9 @@
 - 图形化配置（Config Flow / Options Flow）
 - 可自定义 **生产企业**（写入设备和 HomeKit 配件信息）
 - 输入源可在配置里 **拖拽排序**（顺序即 HA / HomeKit 显示顺序）
+- 电源默认为 **单个电源键**（实体行上一个开关，开/关发同一条指令）
 - 每条指令可映射 **Broadlink 红外**（`remote.send_command`）或 **按钮**（`button.press`）
+- 按钮可 **多选并按顺序执行**，每个按钮可重复按，并可设置按键间隔
 - `media_player` 属性集与官方 **braviatv** 对齐（`device_class=tv`、功能位 155581、ON/OFF、`source`/`source_list`、同一组 `media_*`）
 - **电视与遥控器是同一设备**：HomeKit 只暴露 `media_player`；`DeviceInfo` 不写 model（HomeKit Model = Media Player）
 - 监听 `homekit_tv_remote_key_pressed`，方向键可发红外
