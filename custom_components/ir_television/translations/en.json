@@ -292,10 +292,13 @@
       },
       "source_reorder": {
         "title": "Reorder sources",
-        "description": "Current order (first is the default): {source_order}. Pick a source and move it. Submit again to keep adjusting.",
+        "description": "All sources are listed below. Drag the handle to change order (first is the default). Current: {source_order}. Choose **Back** to return without saving, or **Save and return** after dragging.",
         "data": {
-          "source": "Source",
-          "source_move": "Move"
+          "reorder_action": "When you submit",
+          "source_order": "Sources"
+        },
+        "data_description": {
+          "source_order": "Drag rows to reorder. Do not remove any source."
         }
       },
       "save": {
@@ -313,7 +316,8 @@
       "invalid_action_type": "Choose Broadlink IR or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
       "no_commands": "Keep at least one command or one source.",
-      "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty."
+      "invalid_power_sensor": "Pick a binary_sensor entity, or leave the field empty.",
+      "incomplete_source_order": "Keep every source in the list; only change the order."
     },
     "abort": {
       "unknown": "Something went wrong."
@@ -366,10 +370,10 @@
         "skip": "Not configured"
       }
     },
-    "source_move": {
+    "reorder_action": {
       "options": {
-        "up": "Move up",
-        "down": "Move down"
+        "back": "Back (do not save)",
+        "apply": "Save order and return"
       }
     }
   },
