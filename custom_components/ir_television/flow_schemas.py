@@ -26,6 +26,7 @@ from .actions import (
     button_entity_ids,
     button_press_interval,
     button_repeat_default,
+    button_repeat_map,
     parse_broadlink_codes_payload,
     summarize_action,
 )
@@ -35,11 +36,11 @@ from .const import (
     ATTR_COMMAND,
     ATTR_DEVICE,
     ATTR_ENTITY_ID,
+    ATTR_INTERVAL,
     ATTR_NUM_REPEATS,
     ATTR_TYPE,
     CONF_ACTION_TYPE,
     CONF_BUTTON_ENTITY,
-    CONF_BUTTON_REPEATS,
     CONF_COMMAND,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
@@ -355,8 +356,9 @@ def action_schema(
 ) -> vol.Schema:
     """Broadlink or button mapping form.
 
-    ``allow_button_sequence`` is only for input sources (multi-select, repeats,
-    interval). Other commands take a single button.
+    ``allow_button_sequence`` is only for input sources (multi-select).
+    Per-button repeats and interval are collected in a later step.
+    Other commands take a single button.
     """
     existing = existing or {}
     default_type = existing.get(ATTR_TYPE)
@@ -378,12 +380,6 @@ def action_schema(
     )
     suggested_button = suggested_buttons[0] if suggested_buttons else None
     suggested_repeats = existing.get(ATTR_NUM_REPEATS, 1)
-    suggested_button_repeats = button_repeat_default(existing)
-    suggested_interval = (
-        button_press_interval(existing)
-        if existing.get(ATTR_TYPE) == ACTION_BUTTON
-        else DEFAULT_BUTTON_INTERVAL
-    )
 
     devices, commands = learned_broadlink_names(hass)
     if suggested_device:
@@ -446,26 +442,6 @@ def action_schema(
             schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_multi_dropdown(
                 hass, "button", current=suggested_buttons
             )
-        schema[
-            vol.Optional(CONF_BUTTON_REPEATS, default=suggested_button_repeats)
-        ] = NumberSelector(
-            NumberSelectorConfig(
-                min=1,
-                max=10,
-                step=1,
-                mode=NumberSelectorMode.BOX,
-            )
-        )
-        schema[
-            vol.Optional(CONF_INTERVAL, default=suggested_interval)
-        ] = NumberSelector(
-            NumberSelectorConfig(
-                min=0,
-                max=10,
-                step=0.1,
-                mode=NumberSelectorMode.BOX,
-            )
-        )
     elif suggested_button:
         schema[vol.Optional(CONF_BUTTON_ENTITY, default=suggested_button)] = (
             entity_dropdown(hass, "button", current=suggested_button)
@@ -474,6 +450,44 @@ def action_schema(
         schema[vol.Optional(CONF_BUTTON_ENTITY)] = entity_dropdown(
             hass, "button", current=suggested_button
         )
+    return vol.Schema(schema)
+
+
+def source_button_repeats_schema(
+    ids: list[str],
+    existing: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """One repeat count per selected source button, plus shared interval."""
+    existing = existing or {}
+    repeats_by_id = button_repeat_map(existing)
+    fallback = button_repeat_default(existing)
+    if existing.get(ATTR_TYPE) == ACTION_BUTTON and ATTR_INTERVAL in existing:
+        suggested_interval = button_press_interval(existing)
+    elif existing.get(ATTR_TYPE) == ACTION_BUTTON:
+        suggested_interval = 0.0
+    else:
+        suggested_interval = DEFAULT_BUTTON_INTERVAL
+    schema: dict[Any, Any] = {}
+    for entity_id in ids:
+        default = repeats_by_id.get(entity_id, fallback)
+        schema[vol.Optional(entity_id, default=default)] = NumberSelector(
+            NumberSelectorConfig(
+                min=1,
+                max=10,
+                step=1,
+                mode=NumberSelectorMode.BOX,
+            )
+        )
+    schema[
+        vol.Optional(CONF_INTERVAL, default=suggested_interval)
+    ] = NumberSelector(
+        NumberSelectorConfig(
+            min=0,
+            max=10,
+            step=0.1,
+            mode=NumberSelectorMode.BOX,
+        )
+    )
     return vol.Schema(schema)
 
 
