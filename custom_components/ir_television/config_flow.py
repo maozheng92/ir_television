@@ -15,21 +15,27 @@ except ImportError:  # Home Assistant < 2024.4
 
 from .actions import (
     copy_config,
+    format_button_sequence,
     format_source_order,
     has_useful_config,
     reorder_sources,
     normalize_power_sensor,
     normalize_source_name,
     parse_action_input,
+    parse_source_button_ids,
+    parse_source_button_sequence,
     validate_source_name,
 )
 from .const import (
+    ACTION_BUTTON,
     ATTR_ACTION,
     ATTR_NAME,
+    ATTR_TYPE,
     CHANNEL_COMMANDS,
     CMD_POWER_TOGGLE,
     CMD_TURN_OFF,
     CMD_TURN_ON,
+    CONF_ACTION_TYPE,
     CONF_COMMANDS,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
@@ -63,6 +69,7 @@ from .flow_schemas import (
     power_mode_schema,
     power_sensor_schema,
     source_ask_schema,
+    source_button_repeats_schema,
     source_name_schema,
     source_pick_schema,
     source_reorder_schema,
@@ -81,6 +88,7 @@ class TelevisionFlowMixin:
     _after_queue: str
     _source_draft: dict[str, Any]
     _edit_source_index: int | None
+    _button_sequence_ids: list[str]
     _options_mode: bool
 
     def _reset_wizard(self, data: dict[str, Any] | None = None) -> None:
@@ -105,6 +113,7 @@ class TelevisionFlowMixin:
         self._after_queue = "volume_select"
         self._source_draft = {}
         self._edit_source_index = None
+        self._button_sequence_ids = []
         self._options_mode = False
 
     def _cmd_label(self, key: str) -> str:
@@ -446,16 +455,24 @@ class TelevisionFlowMixin:
             existing = self._source_draft.get(ATTR_ACTION)
 
         if user_input is not None:
-            action, error = parse_action_input(
-                user_input, defaults=self._data, allow_button_sequence=True
-            )
-            if error:
-                errors["base"] = error
+            if user_input.get(CONF_ACTION_TYPE) == ACTION_BUTTON:
+                ids, error = parse_source_button_ids(user_input)
+                if error:
+                    errors["base"] = error
+                else:
+                    assert ids is not None
+                    self._button_sequence_ids = ids
+                    return await self.async_step_source_button_repeats()
             else:
-                self._source_draft[ATTR_ACTION] = action
-                if self._edit_source_index is not None:
-                    return await self._finish_source_edit()
-                return await self._finish_source_add()
+                action, error = parse_action_input(user_input, defaults=self._data)
+                if error:
+                    errors["base"] = error
+                else:
+                    self._button_sequence_ids = []
+                    self._source_draft[ATTR_ACTION] = action
+                    if self._edit_source_index is not None:
+                        return await self._finish_source_edit()
+                    return await self._finish_source_add()
 
         name = self._source_draft.get(ATTR_NAME, "")
         return self.async_show_form(
@@ -470,6 +487,45 @@ class TelevisionFlowMixin:
             description_placeholders={"source_name": name},
         )
 
+    async def async_step_source_button_repeats(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set a repeat count for each selected source button."""
+        ids = list(self._button_sequence_ids)
+        if not ids:
+            return await self.async_step_source_action()
+
+        existing = None
+        if self._edit_source_index is not None:
+            existing = self._data[CONF_SOURCES][self._edit_source_index].get(ATTR_ACTION)
+        elif self._source_draft.get(ATTR_ACTION):
+            existing = self._source_draft.get(ATTR_ACTION)
+        if not isinstance(existing, dict) or existing.get(ATTR_TYPE) != ACTION_BUTTON:
+            existing = None
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            action, error = parse_source_button_sequence(ids, user_input)
+            if error:
+                errors["base"] = error
+            else:
+                self._source_draft[ATTR_ACTION] = action
+                self._button_sequence_ids = []
+                if self._edit_source_index is not None:
+                    return await self._finish_source_edit()
+                return await self._finish_source_add()
+
+        name = self._source_draft.get(ATTR_NAME, "")
+        return self.async_show_form(
+            step_id="source_button_repeats",
+            data_schema=source_button_repeats_schema(ids, existing),
+            errors=errors,
+            description_placeholders={
+                "source_name": name,
+                "button_order": format_button_sequence(ids),
+            },
+        )
+
     async def _finish_source_add(self) -> ConfigFlowResult:
         self._data[CONF_SOURCES].append(
             {
@@ -478,6 +534,7 @@ class TelevisionFlowMixin:
             }
         )
         self._source_draft = {}
+        self._button_sequence_ids = []
         if self._options_mode:
             return await self.async_step_sources()
         return await self.async_step_source_ask()
@@ -491,6 +548,7 @@ class TelevisionFlowMixin:
         }
         self._source_draft = {}
         self._edit_source_index = None
+        self._button_sequence_ids = []
         return await self.async_step_sources()
 
     async def async_step_sources(
@@ -801,6 +859,18 @@ class IRTelevisionOptionsFlow(OptionsFlow, TelevisionFlowMixin):
     ) -> ConfigFlowResult:
         self._ensure()
         return await super().async_step_source_reorder(user_input)
+
+    async def async_step_source_action(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure()
+        return await super().async_step_source_action(user_input)
+
+    async def async_step_source_button_repeats(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure()
+        return await super().async_step_source_button_repeats(user_input)
 
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None
