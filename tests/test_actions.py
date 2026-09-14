@@ -811,15 +811,19 @@ class ManufacturerAndSourceOrderTests(unittest.TestCase):
 
 
 class ButtonSequenceTests(unittest.TestCase):
-    def test_parse_multiple_buttons_in_order(self) -> None:
-        action, err = parse_action_input(
+    def test_parse_per_button_repeats(self) -> None:
+        ids, err = actions.parse_source_button_ids(
+            {"button_entity": ["button.hdmi", "button.ok", "button.back"]}
+        )
+        self.assertIsNone(err)
+        action, err = actions.parse_source_button_sequence(
+            ids or [],
             {
-                "action_type": ACTION_BUTTON,
-                "button_entity": ["button.hdmi", "button.ok", "button.back"],
-                "button_repeats": 2,
+                "button.hdmi": 2,
+                "button.ok": 1,
+                "button.back": 3,
                 "interval": 0.4,
             },
-            allow_button_sequence=True,
         )
         self.assertIsNone(err)
         assert action is not None
@@ -827,7 +831,10 @@ class ButtonSequenceTests(unittest.TestCase):
             [item["entity_id"] for item in action["buttons"]],
             ["button.hdmi", "button.ok", "button.back"],
         )
-        self.assertEqual({item["repeats"] for item in action["buttons"]}, {2})
+        self.assertEqual(
+            [item["repeats"] for item in action["buttons"]],
+            [2, 1, 3],
+        )
         self.assertEqual(action["interval"], 0.4)
         self.assertEqual(
             actions.expand_button_presses(action),
@@ -835,23 +842,30 @@ class ButtonSequenceTests(unittest.TestCase):
                 "button.hdmi",
                 "button.hdmi",
                 "button.ok",
-                "button.ok",
+                "button.back",
                 "button.back",
                 "button.back",
             ],
         )
+        self.assertEqual(
+            actions.button_repeat_map(action),
+            {"button.hdmi": 2, "button.ok": 1, "button.back": 3},
+        )
+        self.assertEqual(
+            actions.format_button_sequence(ids),
+            "1. button.hdmi → 2. button.ok → 3. button.back",
+        )
 
     def test_parse_comma_separated_buttons(self) -> None:
-        action, err = parse_action_input(
-            {
-                "action_type": ACTION_BUTTON,
-                "button_entity": "button.a, button.b",
-            },
-            allow_button_sequence=True,
+        ids, err = actions.parse_source_button_ids(
+            {"button_entity": "button.a, button.b"}
         )
+        self.assertIsNone(err)
+        action, err = actions.parse_source_button_sequence(ids or [], {"interval": 0})
         self.assertIsNone(err)
         assert action is not None
         self.assertEqual(actions.button_entity_ids(action), ["button.a", "button.b"])
+        self.assertEqual([item["repeats"] for item in action["buttons"]], [1, 1])
 
     def test_old_single_button_still_valid(self) -> None:
         action = {"type": ACTION_BUTTON, "entity_id": "button.tv_ok"}
@@ -860,24 +874,20 @@ class ButtonSequenceTests(unittest.TestCase):
         self.assertEqual(actions.button_entity_ids(action), ["button.tv_ok"])
 
     def test_interval_and_repeats_validation(self) -> None:
-        _, err = parse_action_input(
-            {
-                "action_type": ACTION_BUTTON,
-                "button_entity": "button.a",
-                "interval": -1,
-            },
-            allow_button_sequence=True,
+        _, err = actions.parse_source_button_sequence(
+            ["button.a"],
+            {"interval": -1},
         )
         self.assertEqual(err, "invalid_interval")
-        _, err = parse_action_input(
-            {
-                "action_type": ACTION_BUTTON,
-                "button_entity": "button.a",
-                "button_repeats": 0,
-            },
-            allow_button_sequence=True,
+        _, err = actions.parse_source_button_sequence(
+            ["button.a", "button.b"],
+            {"button.a": 2, "button.b": 0, "interval": 0.1},
         )
         self.assertEqual(err, "invalid_button_repeats")
+        _, err = actions.parse_source_button_ids({"button_entity": "switch.not_a_button"})
+        self.assertEqual(err, "invalid_entity")
+        _, err = actions.parse_source_button_ids({"button_entity": []})
+        self.assertEqual(err, "missing_button")
 
     def test_copy_config_keeps_button_sequence(self) -> None:
         sequence = {
