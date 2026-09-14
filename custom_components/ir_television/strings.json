@@ -10,7 +10,7 @@
           "manufacturer": "Manufacturer"
         },
         "data_description": {
-          "manufacturer": "Shown as the device manufacturer (生产企业). HomeKit Accessory Information uses this field. Default is IR Television."
+          "manufacturer": "Shown as the device manufacturer (企业生产). HomeKit Accessory Information uses this field. Default is IR Television."
         }
       },
       "defaults": {
@@ -106,20 +106,26 @@
       },
       "source_action": {
         "title": "Source action: {source_name}",
-        "description": "What should happen when someone selects **{source_name}**? For Button, pick one or more buttons to run in order.",
+        "description": "What should happen when someone selects **{source_name}**? For Button, pick one or more buttons to run in order. Repeat counts are set on the next step.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "Broadlink / remote entity",
           "device": "Broadlink device name",
           "command": "Learned command name",
           "num_repeats": "IR repeats",
-          "button_entity": "Buttons",
-          "button_repeats": "Repeats per button",
+          "button_entity": "Buttons"
+        },
+        "data_description": {
+          "button_entity": "Only input sources can select several `button.*` entities; they run in list order (drag to reorder). Each button gets its own repeat count next."
+        }
+      },
+      "source_button_repeats": {
+        "title": "Button repeats: {source_name}",
+        "description": "Set how many times each button is pressed, in this order: {button_order}",
+        "data": {
           "interval": "Delay between presses (seconds)"
         },
         "data_description": {
-          "button_entity": "Only input sources can select several `button.*` entities; they run in list order (drag to reorder).",
-          "button_repeats": "Each selected button is pressed this many times before the next button.",
           "interval": "Wait this many seconds between every button.press (including repeats)."
         }
       }
@@ -167,7 +173,7 @@
           "manufacturer": "Manufacturer"
         },
         "data_description": {
-          "manufacturer": "Device / HomeKit manufacturer (生产企业)."
+          "manufacturer": "Device / HomeKit manufacturer (企业生产)."
         }
       },
       "defaults": {
@@ -270,15 +276,20 @@
       },
       "source_action": {
         "title": "Source action: {source_name}",
-        "description": "Command sent when **{source_name}** is selected. Buttons run in order, with optional repeats and delay.",
+        "description": "Command sent when **{source_name}** is selected. Buttons run in list order; each button's repeat count is set next.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "Broadlink / remote entity",
           "device": "Broadlink device name",
           "command": "Learned command name",
           "num_repeats": "IR repeats",
-          "button_entity": "Buttons",
-          "button_repeats": "Repeats per button",
+          "button_entity": "Buttons"
+        }
+      },
+      "source_button_repeats": {
+        "title": "Button repeats: {source_name}",
+        "description": "Set how many times each button is pressed, in this order: {button_order}",
+        "data": {
           "interval": "Delay between presses (seconds)"
         }
       },
