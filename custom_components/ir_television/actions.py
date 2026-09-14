@@ -40,7 +40,6 @@ from .const import (
     CMD_VOLUME_UP,
     CONF_ACTION_TYPE,
     CONF_BUTTON_ENTITY,
-    CONF_BUTTON_REPEATS,
     CONF_COMMAND,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
@@ -717,6 +716,93 @@ def parse_button_entity_input(raw: Any) -> list[str]:
     return []
 
 
+def ordered_unique_button_ids(ids: list[str]) -> list[str]:
+    """Keep first occurrence of each button entity id."""
+    unique: list[str] = []
+    for entity_id in ids:
+        if entity_id not in unique:
+            unique.append(entity_id)
+    return unique
+
+
+def parse_source_button_ids(
+    user_input: dict[str, Any],
+) -> tuple[list[str] | None, str | None]:
+    """Validate the ordered button list from an input-source mapping form."""
+    ids = ordered_unique_button_ids(
+        parse_button_entity_input(user_input.get(CONF_BUTTON_ENTITY))
+    )
+    if not ids:
+        return None, "missing_button"
+    if any(not entity_id.startswith("button.") for entity_id in ids):
+        return None, "invalid_entity"
+    return ids, None
+
+
+def button_repeat_map(action: dict[str, Any] | None) -> dict[str, int]:
+    """Per-button repeat counts from a stored source action (first wins)."""
+    result: dict[str, int] = {}
+    if not isinstance(action, dict):
+        return result
+    fallback = _button_repeats(action, 1)
+    buttons = action.get(ATTR_BUTTONS)
+    if isinstance(buttons, list) and buttons:
+        for item in buttons:
+            entity_id = None
+            repeats = fallback
+            if isinstance(item, str):
+                entity_id = item.strip()
+            elif isinstance(item, dict):
+                raw = item.get(ATTR_ENTITY_ID)
+                if isinstance(raw, str):
+                    entity_id = raw.strip()
+                repeats = _button_repeats(item, fallback)
+            if entity_id and entity_id.startswith("button.") and entity_id not in result:
+                result[entity_id] = repeats
+        return result
+    for entity_id in button_entity_ids(action):
+        result[entity_id] = fallback
+    return result
+
+
+def format_button_sequence(ids: list[str] | None) -> str:
+    """Human-readable 1. button.a → 2. button.b order for form placeholders."""
+    if not ids:
+        return "—"
+    return " → ".join(
+        f"{index}. {entity_id}" for index, entity_id in enumerate(ids, start=1)
+    )
+
+
+def parse_source_button_sequence(
+    ids: list[str],
+    user_input: dict[str, Any],
+) -> tuple[ActionDict | None, str | None]:
+    """Build a stored source button action with per-button repeats."""
+    ids = ordered_unique_button_ids([entity_id for entity_id in ids if entity_id])
+    if not ids:
+        return None, "missing_button"
+    if any(not entity_id.startswith("button.") for entity_id in ids):
+        return None, "invalid_entity"
+    buttons: list[dict[str, Any]] = []
+    for entity_id in ids:
+        repeats, error = parse_button_repeats_input(user_input.get(entity_id))
+        if error:
+            return None, error
+        assert repeats is not None
+        buttons.append({ATTR_ENTITY_ID: entity_id, ATTR_REPEATS: repeats})
+    interval, error = parse_interval_input(user_input.get(CONF_INTERVAL))
+    if error:
+        return None, error
+    assert interval is not None
+    return {
+        ATTR_TYPE: ACTION_BUTTON,
+        ATTR_ENTITY_ID: ids[0],
+        ATTR_BUTTONS: buttons,
+        ATTR_INTERVAL: interval,
+    }, None
+
+
 def button_entity_ids(action: dict[str, Any] | None) -> list[str]:
     """Return configured button entity ids in press order (no repeats)."""
     if not isinstance(action, dict):
@@ -875,13 +961,12 @@ def action_is_valid(action: Any) -> bool:
 def parse_action_input(
     user_input: dict[str, Any],
     defaults: dict[str, Any] | None = None,
-    *,
-    allow_button_sequence: bool = False,
 ) -> tuple[ActionDict | None, str | None]:
     """Parse a config-flow form into a stored action.
 
     Returns (action, error_key). error_key is set on validation failure.
-    ``allow_button_sequence`` is only for input sources.
+    Button mappings store a single entity; input sources use
+    ``parse_source_button_ids`` then ``parse_source_button_sequence``.
     """
     defaults = defaults or {}
     action_type = user_input.get(CONF_ACTION_TYPE)
@@ -929,26 +1014,7 @@ def parse_action_input(
             return None, "missing_button"
         if any(not entity_id.startswith("button.") for entity_id in ids):
             return None, "invalid_entity"
-        if not allow_button_sequence:
-            return {ATTR_TYPE: ACTION_BUTTON, ATTR_ENTITY_ID: ids[0]}, None
-        repeats, error = parse_button_repeats_input(user_input.get(CONF_BUTTON_REPEATS))
-        if error:
-            return None, error
-        interval, error = parse_interval_input(user_input.get(CONF_INTERVAL))
-        if error:
-            return None, error
-        assert repeats is not None and interval is not None
-        action = {
-            ATTR_TYPE: ACTION_BUTTON,
-            ATTR_ENTITY_ID: ids[0],
-            ATTR_BUTTONS: [
-                {ATTR_ENTITY_ID: entity_id, ATTR_REPEATS: repeats} for entity_id in ids
-            ],
-            ATTR_INTERVAL: interval,
-        }
-        if repeats != 1:
-            action[ATTR_NUM_REPEATS] = repeats
-        return action, None
+        return {ATTR_TYPE: ACTION_BUTTON, ATTR_ENTITY_ID: ids[0]}, None
 
     return None, "invalid_action_type"
 
