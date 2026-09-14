@@ -4,10 +4,10 @@
     "step": {
       "user": {
         "title": "添加红外电视",
-        "description": "先给这台电视起个名字，并填写生产企业（Home Assistant 设备和 HomeKit 配件信息都会显示）。接下来会映射电源、音量、播放和输入源。每条指令都可以是 Broadlink 红外（`remote.send_command`）或 Home Assistant 按钮（`button.press`）。",
+        "description": "先给这台电视起个名字，并填写企业生产（Home Assistant 设备和 HomeKit 配件信息都会显示）。接下来会映射电源、音量、播放和输入源。每条指令都可以是 Broadlink 红外（`remote.send_command`）或 Home Assistant 按钮（`button.press`）。",
         "data": {
           "name": "电视名称",
-          "manufacturer": "生产企业"
+          "manufacturer": "企业生产"
         },
         "data_description": {
           "manufacturer": "显示为设备制造商，并写入 HomeKit 配件信息。默认是 IR Television，可改成 TCL、Sony、Hisense 等。"
@@ -106,20 +106,26 @@
       },
       "source_action": {
         "title": "输入源动作：{source_name}",
-        "description": "选择 **{source_name}** 时要发送什么？控制方式为按钮时可多选，按顺序执行。",
+        "description": "选择 **{source_name}** 时要发送什么？控制方式为按钮时可多选，按顺序执行。下一步可为每个按钮单独设置重复次数。",
         "data": {
           "action_type": "控制方式",
           "remote_entity": "Broadlink / 遥控器实体",
           "device": "Broadlink 设备名",
           "command": "已学习的指令名",
           "num_repeats": "红外重复次数",
-          "button_entity": "按钮",
-          "button_repeats": "每个按钮重复次数",
+          "button_entity": "按钮"
+        },
+        "data_description": {
+          "button_entity": "仅输入源可多选 `button.*`，按列表顺序执行（可拖拽排序）。每个按钮的重复次数在下一步单独设置。"
+        }
+      },
+      "source_button_repeats": {
+        "title": "按钮重复次数：{source_name}",
+        "description": "按此顺序为每个按钮单独设置重复次数：{button_order}",
+        "data": {
           "interval": "每次按键间隔（秒）"
         },
         "data_description": {
-          "button_entity": "仅输入源可多选 `button.*`，按列表顺序执行（可拖拽排序）。",
-          "button_repeats": "每个所选按钮连续按这么多次，再执行下一个。",
           "interval": "每次 button.press（含重复）之间等待的秒数。"
         }
       }
@@ -148,7 +154,7 @@
         "title": "配置红外电视",
         "description": "**{name}** — {command_count} 条指令，{source_count} 个输入源。电源传感器：{power_sensor}。修改会暂存在向导中，选择“保存并重新加载”后生效。",
         "menu_options": {
-          "name": "名称与生产企业",
+          "name": "名称与企业生产",
           "defaults": "默认 Broadlink 遥控器",
           "power": "电源",
           "power_sensor": "电源状态传感器",
@@ -161,10 +167,10 @@
         }
       },
       "name": {
-        "title": "名称与生产企业",
+        "title": "名称与企业生产",
         "data": {
           "name": "电视名称",
-          "manufacturer": "生产企业"
+          "manufacturer": "企业生产"
         },
         "data_description": {
           "manufacturer": "设备和 HomeKit 配件信息中的制造商。"
@@ -270,15 +276,20 @@
       },
       "source_action": {
         "title": "输入源动作：{source_name}",
-        "description": "选择 **{source_name}** 时发送的指令。按钮可多选按顺序执行，并可设置重复次数和间隔。",
+        "description": "选择 **{source_name}** 时发送的指令。按钮可多选按顺序执行；每个按钮的重复次数在下一步单独设置。",
         "data": {
           "action_type": "控制方式",
           "remote_entity": "Broadlink / 遥控器实体",
           "device": "Broadlink 设备名",
           "command": "已学习的指令名",
           "num_repeats": "红外重复次数",
-          "button_entity": "按钮",
-          "button_repeats": "每个按钮重复次数",
+          "button_entity": "按钮"
+        }
+      },
+      "source_button_repeats": {
+        "title": "按钮重复次数：{source_name}",
+        "description": "按此顺序为每个按钮单独设置重复次数：{button_order}",
+        "data": {
           "interval": "每次按键间隔（秒）"
         }
       },
