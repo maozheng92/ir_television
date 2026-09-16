@@ -42,6 +42,23 @@ class JsonFileTests(unittest.TestCase):
         self.assertIn("step", payload["config"])
         self.assertIn("user", payload["config"]["step"])
 
+    def test_ir_device_steps_exist_in_all_locales(self) -> None:
+        required_config = ("defaults", "defaults_device", "ir_details")
+        required_options = ("defaults", "defaults_device", "ir_details")
+        for name in ("strings.json", "translations/en.json", "translations/zh-Hans.json"):
+            payload = json.loads((_PKG / name).read_text(encoding="utf-8"))
+            config_steps = payload["config"]["step"]
+            options_steps = payload["options"]["step"]
+            for step in required_config:
+                self.assertIn(step, config_steps, f"{name} config.{step}")
+            for step in required_options:
+                self.assertIn(step, options_steps, f"{name} options.{step}")
+            self.assertNotIn(
+                "default_device",
+                config_steps["defaults"].get("data", {}),
+                f"{name} defaults should only pick the remote",
+            )
+
     def test_brand_icons_exist(self) -> None:
         brand = _PKG / "brand"
         for name in ("icon.png", "icon@2x.png", "logo.png"):
