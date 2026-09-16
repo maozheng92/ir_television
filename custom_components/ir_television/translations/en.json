@@ -1,9 +1,1 @@
-{
-  "title": "IR Television",
-  "entity": {
-    "button": {
-      "up": { "name": "Up" },
-      "info": { "name": "Info" }
-    }
-  }
-}
+SEE_EXACT_PUSH_FILES

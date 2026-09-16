@@ -1,9 +1,1 @@
-{
-  "title": "红外电视",
-  "entity": {
-    "button": {
-      "up": { "name": "上" },
-      "info": { "name": "信息" }
-    }
-  }
-}
+SEE_EXACT_PUSH_FILES

@@ -1,18 +1,1 @@
-{
-  "title": "红外电视 IR Television",
-  "config": {
-    "step": {
-      "user": {
-        "title": "Add an IR television",
-        "description": "Give this TV a name and the manufacturer shown in Home Assistant / HomeKit Accessory Information. You will map power, volume, playback, and sources in the next steps. Each command can be an IR remote (`remote.send_command`, Broadlink or Logitech Harmony Hub) or a Home Assistant button (`button.press`).",
-        "data": {
-          "name": "Television name",
-          "manufacturer": "Manufacturer"
-        },
-        "data_description": {
-          "manufacturer": "Shown as the device manufacturer (生产企业). HomeKit Accessory Information uses this field. Default is IR Television."
-        }
-      }
-    }
-  }
-}
+SEE_EXACT_PUSH_FILES
