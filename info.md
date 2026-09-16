@@ -3,7 +3,7 @@
 把普通红外电视变成 Home Assistant 的 **Television Media Player**（`device_class=tv`），供 **iOS 控制中心「隔空播放遥控器 / Apple TV Remote」**（HomeKit）使用。
 
 - 图形化配置（Config Flow / Options Flow）
-- 可自定义 **企业生产**（写入设备和 HomeKit 配件信息）
+- 可自定义 **生产企业**（写入设备和 HomeKit 配件信息）
 - 输入源可在配置里 **拖拽排序**（顺序即 HA / HomeKit 显示顺序）
 - 电源在实体行上始终是 **一个按钮**。单个电源键发同一条指令；独立开/关机则按当前电视状态选择发送哪一条（有电源传感器时以传感器为准）
 - 每条指令可映射 **红外遥控器**（`remote.send_command`：官方 Broadlink 或 **Logitech Harmony Hub**）或 **按钮**（`button.press`）。红外设备列表按所选遥控器切换：Broadlink 读 `.storage/broadlink_remote_MACADDRESS_codes`，Harmony 读配置目录下的 `harmony_UNIQUE_ID.conf`

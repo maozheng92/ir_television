@@ -3,7 +3,7 @@
 HomeKit reads DeviceInfo for Accessory Information (manufacturer / model).
 ``model`` is ``Media Player`` so the Devices list subtitle matches a typical
 TCL / HomeKit television (not a second copy of the manufacturer).
-Manufacturer is user-configurable (企业生产). Device name comes from the
+Manufacturer is user-configurable (生产企业). Device name comes from the
 config entry title.
 """
 
