@@ -1150,16 +1150,85 @@ def _harmony_function_name(func: Any) -> str:
     return ""
 
 
+def _harmony_has_device_table(config: dict[str, Any]) -> bool:
+    if isinstance(config.get("device"), list):
+        return True
+    devices = config.get("Devices")
+    if not isinstance(devices, dict):
+        devices = config.get("devices")
+    return isinstance(devices, dict)
+
+
+def _harmony_command_names(raw: Any) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        text = value.strip()
+        if text and text not in seen:
+            seen.add(text)
+            names.append(text)
+
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str):
+                add(item)
+            elif isinstance(item, dict):
+                cmd = _harmony_function_name(item)
+                if cmd:
+                    add(cmd)
+    elif isinstance(raw, dict):
+        for key in raw:
+            if isinstance(key, str):
+                add(key)
+    return names
+
+
+def _parse_harmony_devices_map(
+    devices_map: dict[str, Any], wanted: str
+) -> tuple[list[str], list[str]]:
+    """HA Harmony cache: ``{"Apple TV": {"commands": [...], "id": "…"}}``."""
+    devices: list[str] = []
+    commands: list[str] = []
+    seen_commands: set[str] = set()
+    for raw_name, info in devices_map.items():
+        label = str(raw_name).strip() if raw_name is not None else ""
+        if not label:
+            continue
+        devices.append(label)
+        ident = ""
+        raw_cmds: Any = None
+        if isinstance(info, dict):
+            device_id = info.get("id")
+            if device_id is not None and str(device_id).strip():
+                ident = str(device_id).strip()
+            raw_cmds = info.get("commands")
+        elif isinstance(info, list):
+            raw_cmds = info
+        aliases = [label]
+        if ident and ident.lower() != label.lower():
+            aliases.append(ident)
+        if wanted and not any(name.lower() == wanted for name in aliases):
+            continue
+        for cmd in _harmony_command_names(raw_cmds):
+            if cmd not in seen_commands:
+                seen_commands.add(cmd)
+                commands.append(cmd)
+    return devices, commands
+
+
 def parse_harmony_config(
     payload: Any,
     *,
     device: str | None = None,
 ) -> tuple[list[str], list[str]]:
-    """Extract Harmony Hub device labels/ids and IR command names.
+    """Extract Harmony Hub device names and IR command names.
 
-    ``payload`` is a Harmony hub config dict (``{"device": [...], ...}``).
+    Accepts the Home Assistant Harmony cache
+    (``{"Devices": {"Apple TV": {"commands": [...], "id": "…"}, ...}}``)
+    and the older hub dump (``{"device": [{"label": ..., "controlGroup": ...}]}``).
     When ``device`` is set, command names are limited to that device
-    (matched by label or id, case-insensitive).
+    (matched by name or id, case-insensitive).
     """
     devices: list[str] = []
     commands: list[str] = []
@@ -1168,13 +1237,18 @@ def parse_harmony_config(
     if not isinstance(payload, dict):
         return [], []
     nested = payload.get("config")
-    if isinstance(nested, dict) and isinstance(nested.get("device"), list):
+    if isinstance(nested, dict) and _harmony_has_device_table(nested):
         config = nested
     else:
         config = payload
     if not isinstance(config, dict):
         return [], []
     wanted = str(device).strip().lower() if device else ""
+    devices_map = config.get("Devices")
+    if not isinstance(devices_map, dict):
+        devices_map = config.get("devices")
+    if isinstance(devices_map, dict):
+        return _parse_harmony_devices_map(devices_map, wanted)
     raw_devices = config.get("device")
     if not isinstance(raw_devices, list):
         return [], []
@@ -1208,6 +1282,11 @@ def parse_harmony_config(
                 if cmd and cmd not in seen_commands:
                     seen_commands.add(cmd)
                     commands.append(cmd)
+        extra_cmds = item.get("commands")
+        for cmd in _harmony_command_names(extra_cmds):
+            if cmd not in seen_commands:
+                seen_commands.add(cmd)
+                commands.append(cmd)
     return devices, commands
 
 
