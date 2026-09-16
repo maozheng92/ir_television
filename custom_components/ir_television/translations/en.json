@@ -15,14 +15,19 @@
       },
       "defaults": {
         "title": "Default IR remote",
-        "description": "Optional. If most keys live on one IR blaster, pick its `remote.*` entity (official Broadlink or Logitech Harmony Hub) and the device name. Later steps can leave the remote empty and only ask for the command name.",
+        "description": "Optional. Pick the Broadlink or Logitech Harmony Hub `remote.*` used for most keys. The next step lists IR devices from **that remote's** file only.",
         "data": {
-          "default_remote": "Default remote entity",
-          "default_device": "Default IR device name"
+          "default_remote": "Default remote entity"
         },
         "data_description": {
-          "default_remote": "Select a `remote.*` entity that supports `send_command`. Official Broadlink and Logitech Harmony Hub are both supported.",
-          "default_device": "Broadlink learned device name, or the Harmony Hub device name / ID (Harmony requires this). Leave empty if unused."
+          "default_remote": "Broadlink uses `.storage/broadlink_remote_MACADDRESS_codes`. Harmony Hub uses `harmony_UNIQUE_ID.conf` in the config folder."
+        }
+      },
+      "defaults_device": {
+        "title": "Default IR device",
+        "description": "Devices for **{remote_entity}** are read from `{codes_file}`. Harmony Hub requires a device name or ID.",
+        "data": {
+          "default_device": "Default IR device name"
         }
       },
       "power_mode": {
@@ -46,7 +51,7 @@
       },
       "command": {
         "title": "Map: {command}",
-        "description": "Configure **{command}** (`{command_key}`).\n\n• IR remote: choose a Broadlink or Logitech Harmony Hub `remote.*` (or rely on the default), then the IR device and command.\n• Button: choose a `button.*` entity from the dropdown.",
+        "description": "Configure **{command}** (`{command_key}`).\n\n• IR remote: pick Broadlink or Harmony Hub, then the next step lists devices from that remote's codes file.\n• Button: choose a `button.*` entity from the dropdown.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "IR remote entity",
@@ -60,6 +65,19 @@
           "device": "Broadlink learned device, or Harmony Hub device name / ID. Harmony Hub requires this field.",
           "command": "Broadlink learned name (for example `power_on`) or Harmony command (for example `PowerToggle`).",
           "button_entity": "Required when the control method is Button."
+        }
+      },
+      "ir_details": {
+        "title": "IR device: {command}",
+        "description": "Devices and commands for **{remote_entity}** are read from `{codes_file}` (`broadlink_remote_MACADDRESS_codes` or `harmony_UNIQUE_ID.conf`).",
+        "data": {
+          "device": "IR device name",
+          "command": "Command name",
+          "num_repeats": "IR repeats"
+        },
+        "data_description": {
+          "device": "Only devices from this remote's file are listed. Harmony Hub requires a device name or ID.",
+          "command": "Broadlink learned name (for example `power_on`) or Harmony command (for example `PowerToggle`)."
         }
       },
       "volume_select": {
@@ -106,7 +124,7 @@
       },
       "source_action": {
         "title": "Source action: {source_name}",
-        "description": "What should happen when someone selects **{source_name}**? For Button, pick one or more buttons to run in order. Repeat counts are set on the next step.",
+        "description": "What should happen when someone selects **{source_name}**? For IR, pick the remote first; the next step lists devices from that remote's file. For Button, pick one or more buttons to run in order.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "IR remote entity",
@@ -179,9 +197,15 @@
       },
       "defaults": {
         "title": "Default IR remote",
-        "description": "Used when a later IR mapping leaves the remote or device field empty. Pick Broadlink or a Logitech Harmony Hub.",
+        "description": "Used when a later IR mapping leaves the remote empty. Pick Broadlink or Harmony Hub; the next step lists devices from that remote's file.",
         "data": {
-          "default_remote": "Default remote entity",
+          "default_remote": "Default remote entity"
+        }
+      },
+      "defaults_device": {
+        "title": "Default IR device",
+        "description": "Devices for **{remote_entity}** are read from `{codes_file}`.",
+        "data": {
           "default_device": "Default IR device name"
         }
       },
@@ -206,7 +230,7 @@
       },
       "command": {
         "title": "Map: {command}",
-        "description": "Configure **{command}** (`{command_key}`).",
+        "description": "Configure **{command}** (`{command_key}`). IR remotes pick the remote first; devices load from that remote's file next.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "IR remote entity",
@@ -214,6 +238,15 @@
           "command": "Command name",
           "num_repeats": "IR repeats",
           "button_entity": "Button entity"
+        }
+      },
+      "ir_details": {
+        "title": "IR device: {command}",
+        "description": "Devices and commands for **{remote_entity}** are read from `{codes_file}`.",
+        "data": {
+          "device": "IR device name",
+          "command": "Command name",
+          "num_repeats": "IR repeats"
         }
       },
       "volume": {
@@ -277,7 +310,7 @@
       },
       "source_action": {
         "title": "Source action: {source_name}",
-        "description": "Command sent when **{source_name}** is selected. Buttons run in list order; each button's repeat count is set next.",
+        "description": "Command sent when **{source_name}** is selected. For IR, pick the remote first; devices load from that remote's file next. Buttons run in list order; each button's repeat count is set next.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "IR remote entity",
