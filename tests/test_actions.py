@@ -83,6 +83,7 @@ next_homekit_port = actions.next_homekit_port
 normalize_power_sensor = actions.normalize_power_sensor
 parse_action_input = actions.parse_action_input
 parse_broadlink_codes_payload = actions.parse_broadlink_codes_payload
+parse_harmony_config = actions.parse_harmony_config
 power_is_on_from_sensor = actions.power_is_on_from_sensor
 resolve_command_key = actions.resolve_command_key
 resolve_homekit_remote_key = actions.resolve_homekit_remote_key
@@ -493,6 +494,87 @@ class BroadlinkCodesTests(unittest.TestCase):
     def test_invalid(self) -> None:
         self.assertEqual(parse_broadlink_codes_payload(None), ([], []))
         self.assertEqual(parse_broadlink_codes_payload([]), ([], []))
+
+
+_HARMONY_CONFIG = {
+    "device": [
+        {
+            "id": 12345678,
+            "label": "Living Room TV",
+            "controlGroup": [
+                {
+                    "name": "Power",
+                    "function": [
+                        {"name": "PowerToggle", "label": "Power Toggle"},
+                        {"name": "PowerOff"},
+                    ],
+                },
+                {"name": "Volume", "function": [{"name": "VolumeUp"}]},
+            ],
+        },
+        {
+            "id": "99",
+            "label": "Soundbar",
+            "controlGroup": [{"function": [{"name": "Mute"}]}],
+        },
+    ]
+}
+
+
+class HarmonyConfigTests(unittest.TestCase):
+    def test_devices_and_commands(self) -> None:
+        devices, commands = parse_harmony_config(_HARMONY_CONFIG)
+        self.assertEqual(
+            devices, ["Living Room TV", "12345678", "Soundbar", "99"]
+        )
+        self.assertEqual(
+            commands, ["PowerToggle", "PowerOff", "VolumeUp", "Mute"]
+        )
+
+    def test_filter_by_label_or_id(self) -> None:
+        _devices, commands = parse_harmony_config(
+            _HARMONY_CONFIG, device="Living Room TV"
+        )
+        self.assertEqual(commands, ["PowerToggle", "PowerOff", "VolumeUp"])
+        _devices, commands = parse_harmony_config(
+            {"config": _HARMONY_CONFIG}, device="12345678"
+        )
+        self.assertEqual(commands, ["PowerToggle", "PowerOff", "VolumeUp"])
+
+    def test_invalid(self) -> None:
+        self.assertEqual(parse_harmony_config(None), ([], []))
+        self.assertEqual(parse_harmony_config({"device": {}}), ([], []))
+
+    def test_harmony_requires_device(self) -> None:
+        _, err = parse_action_input(
+            {
+                "action_type": ACTION_BROADLINK,
+                "remote_entity": "remote.living_room",
+                "command": "PowerToggle",
+            },
+            require_device=True,
+        )
+        self.assertEqual(err, "missing_device")
+        action, err = parse_action_input(
+            {
+                "action_type": ACTION_BROADLINK,
+                "remote_entity": "remote.living_room",
+                "command": "PowerToggle",
+                "device": "Living Room TV",
+            },
+            require_device=True,
+        )
+        self.assertIsNone(err)
+        self.assertEqual(action["device"], "Living Room TV")
+        self.assertEqual(
+            build_remote_service_data(action),
+            {
+                "entity_id": "remote.living_room",
+                "command": "PowerToggle",
+                "num_repeats": 1,
+                "device": "Living Room TV",
+            },
+        )
 
 
 class HomeKitIidDecodeTests(unittest.TestCase):
