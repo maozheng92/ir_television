@@ -1,10 +1,10 @@
 """Shared entity base — same shape as official ``braviatv.entity.BraviaTVEntity``.
 
 HomeKit reads DeviceInfo for Accessory Information (manufacturer / model).
-braviatv sets manufacturer only and leaves ``model`` empty so HomeKit falls
-back to ``media_player``.title() == ``Media Player``. We do the same: do not
-set ``model`` or ``name`` here (device name comes from the config entry title).
-Manufacturer is user-configurable (生产企业).
+``model`` is ``Media Player`` so the Devices list subtitle matches a typical
+TCL / HomeKit television (not a second copy of the manufacturer).
+Manufacturer is user-configurable (企业生产). Device name comes from the
+config entry title.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .actions import resolve_manufacturer
-from .const import DOMAIN
+from .const import DEVICE_MODEL, DOMAIN
 
 
 class IRTelevisionEntity:
@@ -28,9 +28,8 @@ class IRTelevisionEntity:
 
     @property
     def device_info(self) -> DeviceInfo:
-        # Match BraviaTVEntity: identifiers + manufacturer only.
-        # No model (HomeKit Model → "Media Player"), no name (entry title).
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.entry_id)},
             manufacturer=resolve_manufacturer(dict(self._entry.data)),
+            model=DEVICE_MODEL,
         )

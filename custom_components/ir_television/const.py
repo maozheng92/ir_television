@@ -14,6 +14,8 @@ DEFAULT_SOURCE_NAME = "TV"
 EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED = "homekit_tv_remote_key_pressed"
 
 DEFAULT_MANUFACTURER = "IR Television"
+# Shown under the device name in Settings → Devices (same as HomeKit Model).
+DEVICE_MODEL = "Media Player"
 MANUFACTURER = DEFAULT_MANUFACTURER
 
 CONF_NAME = "name"
