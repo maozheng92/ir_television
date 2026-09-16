@@ -1,1 +1,41 @@
-{"title":"红外电视","config":{"step":{"user":{"title":"添加红外电视","description":"先给这台电视起个名字，并填写生产企业（Home Assistant 设备和 HomeKit 配件信息都会显示）。接下来会映射电源、音量、播放和输入源。每条指令都可以是红外遥控器（`remote.send_command`，Broadlink 或 Logitech Harmony Hub）或 Home Assistant 按钮（`button.press`）。","data":{"name":"电视名称","manufacturer":"生产企业"},"data_description":{"manufacturer":"显示为设备制造商，并写入 HomeKit 配件信息。默认是 IR Television，可改成 TCL、Sony、Hisense 等。"}},"defaults":{"title":"默认红外遥控器","description":"可选。选择大部分按键使用的 Broadlink 或 Logitech Harmony Hub 的 `remote.*`。下一步只会列出**该遥控器对应文件**里的红外设备。","data":{"default_remote":"默认遥控器实体"},"data_description":{"default_remote":"Broadlink 对应 `.storage/broadlink_remote_MACADDRESS_codes`。Harmony Hub 对应配置目录下的 `harmony_UNIQUE_ID.conf`。"}},"defaults_device":{"title":"默认红外设备","description":"**{remote_entity}** 的设备列表来自 `{codes_file}`。Harmony Hub 必须填写设备名称或 ID。","data":{"default_device":"默认红外设备名"}},"ir_details":{"title":"红外设备：{command}","description":"**{remote_entity}** 的设备和指令来自 `{codes_file}`（Broadlink 为 `broadlink_remote_MACADDRESS_codes`，Harmony 为 `harmony_UNIQUE_ID.conf`）。","data":{"device":"红外设备名","command":"指令名","num_repeats":"红外重复次数"}}},"options":{"step":{"defaults_device":{"title":"默认红外设备","description":"**{remote_entity}** 的设备列表来自 `{codes_file}`。","data":{"default_device":"默认红外设备名"}},"ir_details":{"title":"红外设备：{command}","description":"**{remote_entity}** 的设备和指令来自 `{codes_file}`。","data":{"device":"红外设备名","command":"指令名","num_repeats":"红外重复次数"}}}}}}
+{
+  "title": "红外电视",
+  "config": {
+    "step": {
+      "user": {
+        "title": "添加红外电视",
+        "description": "先给这台电视起个名字，并填写生产企业（Home Assistant 设备和 HomeKit 配件信息都会显示）。接下来会映射电源、音量、播放和输入源。每条指令都可以是红外遥控器（`remote.send_command`，Broadlink 或 Logitech Harmony Hub）或 Home Assistant 按钮（`button.press`）。",
+        "data": {
+          "name": "电视名称",
+          "manufacturer": "生产企业"
+        }
+      },
+      "defaults": {
+        "title": "默认红外遥控器",
+        "description": "可选。选择大部分按键使用的 Broadlink 或 Logitech Harmony Hub 的 `remote.*`。下一步只会列出**该遥控器对应文件**里的红外设备。",
+        "data": {
+          "default_remote": "默认遥控器实体"
+        },
+        "data_description": {
+          "default_remote": "Broadlink 对应 `.storage/broadlink_remote_MACADDRESS_codes`。Harmony Hub 对应配置目录下的 `harmony_UNIQUE_ID.conf`。"
+        }
+      },
+      "defaults_device": {
+        "title": "默认红外设备",
+        "description": "**{remote_entity}** 的设备列表来自 `{codes_file}`。Harmony Hub 必须填写设备名称或 ID。",
+        "data": {
+          "default_device": "默认红外设备名"
+        }
+      },
+      "ir_details": {
+        "title": "红外设备：{command}",
+        "description": "**{remote_entity}** 的设备和指令来自 `{codes_file}`（Broadlink 为 `broadlink_remote_MACADDRESS_codes`，Harmony 为 `harmony_UNIQUE_ID.conf`）。",
+        "data": {
+          "device": "红外设备名",
+          "command": "指令名",
+          "num_repeats": "红外重复次数"
+        }
+      }
+    }
+  }
+}
