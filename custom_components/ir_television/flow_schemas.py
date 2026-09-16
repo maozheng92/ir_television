@@ -28,6 +28,7 @@ from .actions import (
     button_repeat_default,
     button_repeat_map,
     parse_broadlink_codes_payload,
+    parse_harmony_config,
     summarize_action,
 )
 from .const import (
@@ -176,6 +177,148 @@ def learned_broadlink_names(hass: HomeAssistant) -> tuple[list[str], list[str]]:
     return sorted(devices), sorted(commands)
 
 
+def _merge_unique(left: list[str], right: list[str]) -> list[str]:
+    seen: set[str] = set()
+    merged: list[str] = []
+    for name in [*left, *right]:
+        if name and name not in seen:
+            seen.add(name)
+            merged.append(name)
+    return merged
+
+
+def is_harmony_remote(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """True when the remote belongs to Logitech Harmony Hub."""
+    if not entity_id or not isinstance(entity_id, str):
+        return False
+    try:
+        from homeassistant.helpers import entity_registry as er
+
+        entry = er.async_get(hass).async_get(entity_id)
+    except Exception:  # noqa: BLE001 — registry is optional during tests
+        entry = None
+    if entry is not None and getattr(entry, "platform", None) == "harmony":
+        return True
+    state = hass.states.get(entity_id) if getattr(hass, "states", None) else None
+    attrs = getattr(state, "attributes", None) if state is not None else None
+    return isinstance(attrs, dict) and "current_activity" in attrs
+
+
+def _harmony_config_from_obj(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict) and isinstance(value.get("device"), list):
+        return value
+    nested = value.get("config") if isinstance(value, dict) else None
+    if isinstance(nested, dict) and isinstance(nested.get("device"), list):
+        return nested
+    for attr in ("config", "_config", "harmony_config", "hub_config"):
+        cfg = getattr(value, attr, None)
+        if callable(cfg):
+            try:
+                cfg = cfg()
+            except TypeError:
+                continue
+        if isinstance(cfg, dict) and isinstance(cfg.get("device"), list):
+            return cfg
+    client = getattr(value, "_client", None) or getattr(value, "client", None)
+    if client is None:
+        return None
+    for attr in ("hub_config", "config", "_config"):
+        cfg = getattr(client, attr, None)
+        if callable(cfg):
+            try:
+                cfg = cfg()
+            except TypeError:
+                continue
+        if isinstance(cfg, dict) and isinstance(cfg.get("device"), list):
+            return cfg
+    return None
+
+
+def _harmony_configs(
+    hass: HomeAssistant, remote_entity_id: str | None = None
+) -> list[dict[str, Any]]:
+    """Hub configs, optionally limited to the Harmony remote's config entry."""
+    domain_data = getattr(hass, "data", None)
+    harmony_data = domain_data.get("harmony") if isinstance(domain_data, dict) else None
+    configs: list[dict[str, Any]] = []
+    entry_id: str | None = None
+    if remote_entity_id:
+        try:
+            from homeassistant.helpers import entity_registry as er
+
+            ent = er.async_get(hass).async_get(remote_entity_id)
+        except Exception:  # noqa: BLE001
+            ent = None
+        if ent is not None and getattr(ent, "platform", None) == "harmony":
+            entry_id = getattr(ent, "config_entry_id", None)
+
+    if isinstance(harmony_data, dict):
+        values: list[Any]
+        if entry_id and entry_id in harmony_data:
+            values = [harmony_data[entry_id]]
+        else:
+            values = list(harmony_data.values())
+        for value in values:
+            cfg = _harmony_config_from_obj(value)
+            if cfg is not None:
+                configs.append(cfg)
+
+    try:
+        entries = hass.config_entries.async_entries("harmony")
+    except Exception:  # noqa: BLE001
+        entries = []
+    for entry in entries:
+        if entry_id and getattr(entry, "entry_id", None) != entry_id:
+            continue
+        for blob in (
+            getattr(entry, "data", None),
+            getattr(entry, "options", None),
+        ):
+            cfg = _harmony_config_from_obj(blob)
+            if cfg is not None:
+                configs.append(cfg)
+    return configs
+
+
+def learned_harmony_names(
+    hass: HomeAssistant,
+    *,
+    remote_entity_id: str | None = None,
+    device: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Device labels/ids and command names from Logitech Harmony Hub."""
+    devices: list[str] = []
+    commands: list[str] = []
+    for payload in _harmony_configs(hass, remote_entity_id):
+        found_devices, found_commands = parse_harmony_config(payload, device=device)
+        devices = _merge_unique(devices, found_devices)
+        commands = _merge_unique(commands, found_commands)
+    if device and not commands:
+        for payload in _harmony_configs(hass, remote_entity_id):
+            _devices, found_commands = parse_harmony_config(payload)
+            commands = _merge_unique(commands, found_commands)
+            devices = _merge_unique(devices, _devices)
+    return devices, commands
+
+
+def learned_ir_names(
+    hass: HomeAssistant,
+    *,
+    remote_entity_id: str | None = None,
+    device: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Broadlink and/or Harmony device and command names for the form."""
+    bl_devices, bl_commands = learned_broadlink_names(hass)
+    hy_devices, hy_commands = learned_harmony_names(
+        hass, remote_entity_id=remote_entity_id, device=device
+    )
+    if remote_entity_id and is_harmony_remote(hass, remote_entity_id):
+        return hy_devices or bl_devices, hy_commands or bl_commands
+    if remote_entity_id:
+        return bl_devices, bl_commands
+    return _merge_unique(bl_devices, hy_devices), _merge_unique(bl_commands, hy_commands)
+
+
 def _name_dropdown(names: list[str], *, current: str = "") -> SelectSelector:
     options = list(names)
     if current and current not in options:
@@ -249,9 +392,9 @@ def source_reorder_schema(names: list[str]) -> vol.Schema:
 
 
 def defaults_schema(hass: HomeAssistant, data: dict[str, Any]) -> vol.Schema:
-    """Optional default Broadlink remote + device name."""
+    """Optional default IR remote (Broadlink or Harmony Hub) + device name."""
     current_remote = data.get(CONF_DEFAULT_REMOTE) or None
-    devices, _commands = learned_broadlink_names(hass)
+    devices, _commands = learned_ir_names(hass, remote_entity_id=current_remote)
     current_device = data.get(CONF_DEFAULT_DEVICE) or ""
     schema: dict[Any, Any] = {}
     remote_key: Any
@@ -354,7 +497,7 @@ def action_schema(
     existing: dict[str, Any] | None = None,
     allow_button_sequence: bool = False,
 ) -> vol.Schema:
-    """Broadlink or button mapping form.
+    """IR remote (Broadlink / Harmony Hub) or button mapping form.
 
     ``allow_button_sequence`` is only for input sources (multi-select).
     Per-button repeats and interval are collected in a later step.
@@ -381,7 +524,9 @@ def action_schema(
     suggested_button = suggested_buttons[0] if suggested_buttons else None
     suggested_repeats = existing.get(ATTR_NUM_REPEATS, 1)
 
-    devices, commands = learned_broadlink_names(hass)
+    devices, commands = learned_ir_names(
+        hass, remote_entity_id=suggested_remote, device=suggested_device or None
+    )
     if suggested_device:
         device_field: Any = _name_dropdown(devices, current=suggested_device) if devices else _text()
     elif devices:
