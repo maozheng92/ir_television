@@ -1,4 +1,4 @@
-"""IR Television — TV media player driven by Broadlink IR or buttons."""
+"""IR Television — TV media player driven by IR remotes or buttons."""
 
 from __future__ import annotations
 

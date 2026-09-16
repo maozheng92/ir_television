@@ -1,4 +1,4 @@
-"""Send a configured action via Broadlink remote or button entities."""
+"""Send a configured action via IR remote or button entities."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
 {
   "domain": "ir_television",
   "name": "红外电视 IR Television",
-  "after_dependencies": ["homekit"],
+  "after_dependencies": ["homekit", "broadlink", "harmony"],
   "codeowners": ["@maozheng92"],
   "config_flow": true,
   "documentation": "https://github.com/maozheng92/ir_television",
@@ -9,5 +9,5 @@
   "iot_class": "assumed_state",
   "issue_tracker": "https://github.com/maozheng92/ir_television/issues",
   "requirements": [],
-  "version": "1.9.3"
+  "version": "1.10.0"
 }
