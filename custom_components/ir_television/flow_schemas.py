@@ -494,22 +494,19 @@ def defaults_schema(hass: HomeAssistant, data: dict[str, Any]) -> vol.Schema:
 
 
 def defaults_device_schema(hass: HomeAssistant, data: dict[str, Any]) -> vol.Schema:
-    """IR devices from the selected remote's codes/conf file."""
+    """IR devices from the selected remote's codes/conf file (always a dropdown)."""
     current_remote = data.get(CONF_DEFAULT_REMOTE) or None
     devices, _commands = learned_ir_names(hass, remote_entity_id=current_remote)
     current_device = data.get(CONF_DEFAULT_DEVICE) or ""
     schema: dict[Any, Any] = {}
-    if devices:
-        if current_device:
-            schema[vol.Optional(CONF_DEFAULT_DEVICE, default=current_device)] = (
-                _name_dropdown(devices, current=current_device)
-            )
-        else:
-            schema[vol.Optional(CONF_DEFAULT_DEVICE)] = _name_dropdown(
-                devices, current=current_device
-            )
+    if current_device:
+        schema[vol.Optional(CONF_DEFAULT_DEVICE, default=current_device)] = (
+            _name_dropdown(devices, current=current_device)
+        )
     else:
-        schema[vol.Optional(CONF_DEFAULT_DEVICE, default=current_device)] = _text()
+        schema[vol.Optional(CONF_DEFAULT_DEVICE)] = _name_dropdown(
+            devices, current=current_device
+        )
     return vol.Schema(schema)
 
 
@@ -642,14 +639,7 @@ def action_schema(
         devices, commands = learned_ir_names(
             hass, remote_entity_id=suggested_remote, device=suggested_device or None
         )
-        if suggested_device:
-            device_field: Any = (
-                _name_dropdown(devices, current=suggested_device) if devices else _text()
-            )
-        elif devices:
-            device_field = _name_dropdown(devices, current=suggested_device)
-        else:
-            device_field = _text()
+        device_field: Any = _name_dropdown(devices, current=suggested_device)
         if suggested_command:
             command_field: Any = (
                 _name_dropdown(commands, current=suggested_command) if commands else _text()
@@ -717,14 +707,7 @@ def ir_details_schema(
     devices, commands = learned_ir_names(
         hass, remote_entity_id=remote_entity_id, device=suggested_device or None
     )
-    if suggested_device:
-        device_field: Any = (
-            _name_dropdown(devices, current=suggested_device) if devices else _text()
-        )
-    elif devices:
-        device_field = _name_dropdown(devices, current=suggested_device)
-    else:
-        device_field = _text()
+    device_field: Any = _name_dropdown(devices, current=suggested_device)
     if suggested_command:
         command_field: Any = (
             _name_dropdown(commands, current=suggested_command) if commands else _text()
