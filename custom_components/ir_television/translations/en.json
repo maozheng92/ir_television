@@ -10,7 +10,7 @@
           "manufacturer": "Manufacturer"
         },
         "data_description": {
-          "manufacturer": "Shown as the device manufacturer (生产企业). HomeKit Accessory Information uses this field. Default is IR Television."
+          "manufacturer": "Shown as the device manufacturer (企业生产). HomeKit Accessory Information uses this field. Default is IR Television."
         }
       },
       "defaults": {
@@ -192,7 +192,7 @@
           "manufacturer": "Manufacturer"
         },
         "data_description": {
-          "manufacturer": "Device / HomeKit manufacturer (生产企业)."
+          "manufacturer": "Device / HomeKit manufacturer (企业生产)."
         }
       },
       "defaults": {
@@ -446,8 +446,7 @@
       "back": { "name": "Back" },
       "home": { "name": "Home" },
       "menu": { "name": "Menu" },
-      "info": { "name": "Info" },
-      "recreate_homekit": { "name": "Add via HomeKit Bridge (same as Sony)" }
+      "info": { "name": "Info" }
     }
   }
 }
