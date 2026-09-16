@@ -39,6 +39,7 @@ from .const import (
     CONF_COMMANDS,
     CONF_DEFAULT_DEVICE,
     CONF_DEFAULT_REMOTE,
+    CONF_REMOTE_ENTITY,
     CONF_MANUFACTURER,
     CONF_NAME,
     CONF_POWER_SENSOR,
@@ -64,6 +65,7 @@ from .flow_schemas import (
     command_multi_schema,
     current_mappings_text,
     defaults_schema,
+    is_harmony_remote,
     name_schema,
     options_group_schema,
     power_mode_schema,
@@ -146,7 +148,7 @@ class TelevisionFlowMixin:
     async def async_step_defaults(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Optional default Broadlink remote + device."""
+        """Optional default IR remote (Broadlink or Harmony Hub) + device."""
         if user_input is not None:
             remote = user_input.get(CONF_DEFAULT_REMOTE) or None
             device = (user_input.get(CONF_DEFAULT_DEVICE) or "").strip() or None
@@ -245,7 +247,15 @@ class TelevisionFlowMixin:
         key = self._queue[0]
         errors: dict[str, str] = {}
         if user_input is not None:
-            action, error = parse_action_input(user_input, defaults=self._data)
+            action, error = parse_action_input(
+                user_input,
+                defaults=self._data,
+                require_device=is_harmony_remote(
+                    self.hass,
+                    user_input.get(CONF_REMOTE_ENTITY)
+                    or self._data.get(CONF_DEFAULT_REMOTE),
+                ),
+            )
             if error:
                 errors["base"] = error
             else:
@@ -446,7 +456,7 @@ class TelevisionFlowMixin:
     async def async_step_source_action(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Map the current source to Broadlink or a button."""
+        """Map the current source to an IR remote or a button."""
         errors: dict[str, str] = {}
         existing = None
         if self._edit_source_index is not None:
@@ -464,7 +474,15 @@ class TelevisionFlowMixin:
                     self._button_sequence_ids = ids
                     return await self.async_step_source_button_repeats()
             else:
-                action, error = parse_action_input(user_input, defaults=self._data)
+                action, error = parse_action_input(
+                    user_input,
+                    defaults=self._data,
+                    require_device=is_harmony_remote(
+                        self.hass,
+                        user_input.get(CONF_REMOTE_ENTITY)
+                        or self._data.get(CONF_DEFAULT_REMOTE),
+                    ),
+                )
                 if error:
                     errors["base"] = error
                 else:
