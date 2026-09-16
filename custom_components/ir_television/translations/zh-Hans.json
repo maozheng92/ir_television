@@ -1,1 +1,9 @@
-PLACEHOLDER_ZH
+{
+  "title": "红外电视",
+  "entity": {
+    "button": {
+      "up": { "name": "上" },
+      "info": { "name": "信息" }
+    }
+  }
+}

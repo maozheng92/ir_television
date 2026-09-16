@@ -1,1 +1,9 @@
-PLACEHOLDER_EN
+{
+  "title": "IR Television",
+  "entity": {
+    "button": {
+      "up": { "name": "Up" },
+      "info": { "name": "Info" }
+    }
+  }
+}
