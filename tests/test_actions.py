@@ -619,6 +619,29 @@ _HARMONY_CONFIG = {
 }
 
 
+_HARMONY_DEVICES_MAP = {
+    "Activities": {
+        "Watch TV": {"commands": ["PowerOn"], "id": "1"},
+    },
+    "Devices": {
+        "Apple TV": {
+            "commands": [
+                "DirectionDown",
+                "DirectionLeft",
+                "DirectionRight",
+                "DirectionUp",
+                "Select",
+            ],
+            "id": "83881204",
+        },
+        "Apple TV Gen 1": {
+            "commands": ["Home", "Menu", "Back"],
+            "id": "111",
+        },
+    },
+}
+
+
 class HarmonyConfigTests(unittest.TestCase):
     def test_devices_and_commands(self) -> None:
         devices, commands = parse_harmony_config(_HARMONY_CONFIG)
@@ -628,6 +651,49 @@ class HarmonyConfigTests(unittest.TestCase):
         self.assertEqual(
             commands, ["PowerToggle", "PowerOff", "VolumeUp", "Mute"]
         )
+
+    def test_devices_map_uses_names_not_activities(self) -> None:
+        devices, commands = parse_harmony_config(_HARMONY_DEVICES_MAP)
+        self.assertEqual(devices, ["Apple TV", "Apple TV Gen 1"])
+        self.assertEqual(
+            commands,
+            [
+                "DirectionDown",
+                "DirectionLeft",
+                "DirectionRight",
+                "DirectionUp",
+                "Select",
+                "Home",
+                "Menu",
+                "Back",
+            ],
+        )
+        self.assertNotIn("Watch TV", devices)
+        self.assertNotIn("83881204", devices)
+
+    def test_devices_map_filter_by_name_or_id(self) -> None:
+        devices, commands = parse_harmony_config(
+            _HARMONY_DEVICES_MAP, device="Apple TV"
+        )
+        self.assertEqual(devices, ["Apple TV", "Apple TV Gen 1"])
+        self.assertEqual(
+            commands,
+            [
+                "DirectionDown",
+                "DirectionLeft",
+                "DirectionRight",
+                "DirectionUp",
+                "Select",
+            ],
+        )
+        _devices, by_id = parse_harmony_config(
+            {"config": _HARMONY_DEVICES_MAP}, device="83881204"
+        )
+        self.assertEqual(by_id, commands)
+        _devices, gen1 = parse_harmony_config(
+            _HARMONY_DEVICES_MAP, device="apple tv gen 1"
+        )
+        self.assertEqual(gen1, ["Home", "Menu", "Back"])
 
     def test_filter_by_label_or_id(self) -> None:
         _devices, commands = parse_harmony_config(
@@ -642,6 +708,7 @@ class HarmonyConfigTests(unittest.TestCase):
     def test_invalid(self) -> None:
         self.assertEqual(parse_harmony_config(None), ([], []))
         self.assertEqual(parse_harmony_config({"device": {}}), ([], []))
+        self.assertEqual(parse_harmony_config({"Devices": []}), ([], []))
 
     def test_harmony_requires_device(self) -> None:
         _, err = parse_action_input(
