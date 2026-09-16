@@ -961,12 +961,15 @@ def action_is_valid(action: Any) -> bool:
 def parse_action_input(
     user_input: dict[str, Any],
     defaults: dict[str, Any] | None = None,
+    *,
+    require_device: bool = False,
 ) -> tuple[ActionDict | None, str | None]:
     """Parse a config-flow form into a stored action.
 
     Returns (action, error_key). error_key is set on validation failure.
     Button mappings store a single entity; input sources use
     ``parse_source_button_ids`` then ``parse_source_button_sequence``.
+    ``require_device`` is set for Logitech Harmony Hub remotes.
     """
     defaults = defaults or {}
     action_type = user_input.get(CONF_ACTION_TYPE)
@@ -988,6 +991,8 @@ def parse_action_input(
             return None, "invalid_entity"
         if not command:
             return None, "missing_command"
+        if require_device and not device:
+            return None, "missing_device"
 
         action: ActionDict = {
             ATTR_TYPE: ACTION_BROADLINK,
@@ -1020,15 +1025,15 @@ def parse_action_input(
 
 
 def build_remote_service_data(action: ActionDict) -> dict[str, Any]:
-    """Build remote.send_command service data from a Broadlink action."""
+    """Build remote.send_command data for Broadlink or Harmony Hub."""
     data: dict[str, Any] = {
         "entity_id": action[ATTR_ENTITY_ID],
         "command": action[ATTR_COMMAND],
         "num_repeats": int(action.get(ATTR_NUM_REPEATS, 1)),
     }
     device = action.get(ATTR_DEVICE)
-    if device:
-        data["device"] = device
+    if device is not None and str(device).strip():
+        data["device"] = str(device).strip()
     return data
 
 
@@ -1131,6 +1136,77 @@ def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | Non
     if not cleaned.startswith("binary_sensor."):
         return None, "invalid_power_sensor"
     return cleaned, None
+
+
+def _harmony_function_name(func: Any) -> str:
+    if not isinstance(func, dict):
+        return ""
+    for key in ("name", "label"):
+        raw = func.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    return ""
+
+
+def parse_harmony_config(
+    payload: Any,
+    *,
+    device: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Extract Harmony Hub device labels/ids and IR command names.
+
+    ``payload`` is a Harmony hub config dict (``{"device": [...], ...}``).
+    When ``device`` is set, command names are limited to that device
+    (matched by label or id, case-insensitive).
+    """
+    devices: list[str] = []
+    commands: list[str] = []
+    seen_devices: set[str] = set()
+    seen_commands: set[str] = set()
+    if not isinstance(payload, dict):
+        return [], []
+    nested = payload.get("config")
+    if isinstance(nested, dict) and isinstance(nested.get("device"), list):
+        config = nested
+    else:
+        config = payload
+    if not isinstance(config, dict):
+        return [], []
+    wanted = str(device).strip().lower() if device else ""
+    raw_devices = config.get("device")
+    if not isinstance(raw_devices, list):
+        return [], []
+    for item in raw_devices:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label") or item.get("name")
+        device_id = item.get("id")
+        names: list[str] = []
+        if isinstance(label, str) and label.strip():
+            names.append(label.strip())
+        if device_id is not None and str(device_id).strip():
+            ident = str(device_id).strip()
+            if ident not in names:
+                names.append(ident)
+        for name in names:
+            if name not in seen_devices:
+                seen_devices.add(name)
+                devices.append(name)
+        match = (not wanted) or any(name.lower() == wanted for name in names)
+        if not match:
+            continue
+        for group in item.get("controlGroup") or []:
+            if not isinstance(group, dict):
+                continue
+            functions = group.get("function") or []
+            if not isinstance(functions, list):
+                continue
+            for func in functions:
+                cmd = _harmony_function_name(func)
+                if cmd and cmd not in seen_commands:
+                    seen_commands.add(cmd)
+                    commands.append(cmd)
+    return devices, commands
 
 
 def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
