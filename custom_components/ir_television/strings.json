@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Add an IR television",
-        "description": "Give this TV a name and the manufacturer shown in Home Assistant / HomeKit Accessory Information. You will map power, volume, playback, and sources in the next steps. Each command can be a Broadlink IR code (`remote.send_command`) or a Home Assistant button (`button.press`).",
+        "description": "Give this TV a name and the manufacturer shown in Home Assistant / HomeKit Accessory Information. You will map power, volume, playback, and sources in the next steps. Each command can be an IR remote (`remote.send_command`, Broadlink or Logitech Harmony Hub) or a Home Assistant button (`button.press`).",
         "data": {
           "name": "Television name",
           "manufacturer": "Manufacturer"
@@ -14,15 +14,15 @@
         }
       },
       "defaults": {
-        "title": "Default Broadlink remote",
-        "description": "Optional. If most keys live on one Broadlink remote, pick it from the dropdown of available `remote.*` entities (and the device name you used when learning codes). Later steps can leave the remote empty and only ask for the command name.",
+        "title": "Default IR remote",
+        "description": "Optional. If most keys live on one IR blaster, pick its `remote.*` entity (official Broadlink or Logitech Harmony Hub) and the device name. Later steps can leave the remote empty and only ask for the command name.",
         "data": {
           "default_remote": "Default remote entity",
-          "default_device": "Default Broadlink device name"
+          "default_device": "Default IR device name"
         },
         "data_description": {
-          "default_remote": "Select a `remote.*` entity from the dropdown. Official Broadlink is typical.",
-          "default_device": "The device label stored in the Broadlink integration, for example `living_room_tv`. Leave empty if unused."
+          "default_remote": "Select a `remote.*` entity that supports `send_command`. Official Broadlink and Logitech Harmony Hub are both supported.",
+          "default_device": "Broadlink learned device name, or the Harmony Hub device name / ID (Harmony requires this). Leave empty if unused."
         }
       },
       "power_mode": {
@@ -46,19 +46,19 @@
       },
       "command": {
         "title": "Map: {command}",
-        "description": "Configure **{command}** (`{command_key}`).\n\n• Broadlink: choose a `remote.*` entity from the dropdown (or rely on the default), then pick/enter the Broadlink device name and learned command.\n• Button: choose a `button.*` entity from the dropdown.",
+        "description": "Configure **{command}** (`{command_key}`).\n\n• IR remote: choose a Broadlink or Logitech Harmony Hub `remote.*` (or rely on the default), then the IR device and command.\n• Button: choose a `button.*` entity from the dropdown.",
         "data": {
           "action_type": "Control method",
-          "remote_entity": "Broadlink / remote entity",
-          "device": "Broadlink device name",
-          "command": "Learned command name",
+          "remote_entity": "IR remote entity",
+          "device": "IR device name",
+          "command": "Command name",
           "num_repeats": "IR repeats",
           "button_entity": "Button entity"
         },
         "data_description": {
-          "remote_entity": "Required for Broadlink unless you set a default remote. Select from available remote entities.",
-          "device": "Required by the official Broadlink integration in most setups.",
-          "command": "The name you gave the code when you learned it (for example `power_on`).",
+          "remote_entity": "Required for IR unless you set a default remote. Broadlink RM and Logitech Harmony Hub both work.",
+          "device": "Broadlink learned device, or Harmony Hub device name / ID. Harmony Hub requires this field.",
+          "command": "Broadlink learned name (for example `power_on`) or Harmony command (for example `PowerToggle`).",
           "button_entity": "Required when the control method is Button."
         }
       },
@@ -109,9 +109,9 @@
         "description": "What should happen when someone selects **{source_name}**? For Button, pick one or more buttons to run in order. Repeat counts are set on the next step.",
         "data": {
           "action_type": "Control method",
-          "remote_entity": "Broadlink / remote entity",
-          "device": "Broadlink device name",
-          "command": "Learned command name",
+          "remote_entity": "IR remote entity",
+          "device": "IR device name",
+          "command": "Command name",
           "num_repeats": "IR repeats",
           "button_entity": "Buttons"
         },
@@ -133,11 +133,12 @@
     "error": {
       "empty_name": "Name cannot be empty.",
       "duplicate_source": "A source with this name already exists.",
-      "missing_remote": "Pick a remote entity, or go back and set a default Broadlink remote.",
-      "missing_command": "Enter the learned Broadlink command name.",
+      "missing_remote": "Pick a remote entity, or go back and set a default IR remote.",
+      "missing_command": "Enter the IR command name.",
+      "missing_device": "Harmony Hub needs an IR device name or ID.",
       "missing_button": "Pick a button entity.",
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
-      "invalid_action_type": "Choose Broadlink IR or Button.",
+      "invalid_action_type": "Choose IR remote or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
       "invalid_button_repeats": "Each button must repeat between 1 and 10 times.",
       "invalid_interval": "The delay must be between 0 and 10 seconds.",
@@ -155,7 +156,7 @@
         "description": "**{name}** — {command_count} command(s), {source_count} source(s). Power sensor: {power_sensor}. Changes are kept until you choose Save and reload.",
         "menu_options": {
           "name": "Name and manufacturer",
-          "defaults": "Default Broadlink remote",
+          "defaults": "Default IR remote",
           "power": "Power",
           "power_sensor": "Power state sensor",
           "volume": "Volume / mute",
@@ -177,11 +178,11 @@
         }
       },
       "defaults": {
-        "title": "Default Broadlink remote",
-        "description": "Used when a later Broadlink mapping leaves the remote or device field empty.",
+        "title": "Default IR remote",
+        "description": "Used when a later IR mapping leaves the remote or device field empty. Pick Broadlink or a Logitech Harmony Hub.",
         "data": {
           "default_remote": "Default remote entity",
-          "default_device": "Default Broadlink device name"
+          "default_device": "Default IR device name"
         }
       },
       "power_mode": {
@@ -208,9 +209,9 @@
         "description": "Configure **{command}** (`{command_key}`).",
         "data": {
           "action_type": "Control method",
-          "remote_entity": "Broadlink / remote entity",
-          "device": "Broadlink device name",
-          "command": "Learned command name",
+          "remote_entity": "IR remote entity",
+          "device": "IR device name",
+          "command": "Command name",
           "num_repeats": "IR repeats",
           "button_entity": "Button entity"
         }
@@ -279,9 +280,9 @@
         "description": "Command sent when **{source_name}** is selected. Buttons run in list order; each button's repeat count is set next.",
         "data": {
           "action_type": "Control method",
-          "remote_entity": "Broadlink / remote entity",
-          "device": "Broadlink device name",
-          "command": "Learned command name",
+          "remote_entity": "IR remote entity",
+          "device": "IR device name",
+          "command": "Command name",
           "num_repeats": "IR repeats",
           "button_entity": "Buttons"
         }
@@ -331,11 +332,12 @@
     "error": {
       "empty_name": "Name cannot be empty.",
       "duplicate_source": "A source with this name already exists.",
-      "missing_remote": "Pick a remote entity, or set a default Broadlink remote first.",
-      "missing_command": "Enter the learned Broadlink command name.",
+      "missing_remote": "Pick a remote entity, or set a default IR remote first.",
+      "missing_command": "Enter the IR command name.",
+      "missing_device": "Harmony Hub needs an IR device name or ID.",
       "missing_button": "Pick a button entity.",
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
-      "invalid_action_type": "Choose Broadlink IR or Button.",
+      "invalid_action_type": "Choose IR remote or Button.",
       "invalid_repeats": "Repeats must be a whole number between 1 and 10.",
       "invalid_button_repeats": "Each button must repeat between 1 and 10 times.",
       "invalid_interval": "The delay must be between 0 and 10 seconds.",
@@ -350,7 +352,7 @@
   "selector": {
     "action_type": {
       "options": {
-        "broadlink": "Broadlink IR (remote.send_command)",
+        "broadlink": "IR remote (remote.send_command)",
         "button": "Button entity (button.press)"
       }
     },
