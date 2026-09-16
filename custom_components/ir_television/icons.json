@@ -14,8 +14,7 @@
       "back": { "default": "mdi:arrow-u-left-top" },
       "home": { "default": "mdi:home" },
       "menu": { "default": "mdi:menu" },
-      "info": { "default": "mdi:information" },
-      "recreate_homekit": { "default": "mdi:apple" }
+      "info": { "default": "mdi:information" }
     }
   }
 }
