@@ -495,6 +495,104 @@ class BroadlinkCodesTests(unittest.TestCase):
         self.assertEqual(parse_broadlink_codes_payload(None), ([], []))
         self.assertEqual(parse_broadlink_codes_payload([]), ([], []))
 
+    def test_filter_commands_by_device(self) -> None:
+        payload = {
+            "data": {
+                "living_tv": {"power_on": "JgBQ", "hdmi_1": "JgBR"},
+                "soundbar": {"mute": "JgBS"},
+            }
+        }
+        devices, commands = parse_broadlink_codes_payload(
+            payload, device="living_tv"
+        )
+        self.assertEqual(devices, ["living_tv", "soundbar"])
+        self.assertEqual(commands, ["hdmi_1", "power_on"])
+        devices, commands = parse_broadlink_codes_payload(
+            payload, device="Soundbar"
+        )
+        self.assertEqual(commands, ["mute"])
+
+
+class RemoteCodesPathTests(unittest.TestCase):
+    def test_expand_mac_and_unique_id(self) -> None:
+        tokens = actions.expand_remote_identifiers(
+            ["AA:BB:CC:DD:EE:FF", "hub-living-remote"]
+        )
+        self.assertIn("AA:BB:CC:DD:EE:FF", tokens)
+        self.assertIn("AABBCCDDEEFF", tokens)
+        self.assertIn("aabbccddeeff", tokens)
+        self.assertIn("hub-living-remote", tokens)
+        self.assertIn("hub-living", tokens)
+
+    def test_broadlink_file_matches_mac(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = Path(tmp)
+            (storage / "broadlink_remote_aabbccddeeff_codes").write_text(
+                '{"data": {"tv": {"ok": "xx"}}}', encoding="utf-8"
+            )
+            (storage / "broadlink_remote_112233445566_codes").write_text(
+                '{"data": {"other": {"mute": "yy"}}}', encoding="utf-8"
+            )
+            path = actions.resolve_broadlink_codes_path(
+                storage, ["AA:BB:CC:DD:EE:FF"]
+            )
+            self.assertIsNotNone(path)
+            assert path is not None
+            self.assertEqual(path.name, "broadlink_remote_aabbccddeeff_codes")
+            other = actions.resolve_broadlink_codes_path(
+                storage, ["11:22:33:44:55:66"]
+            )
+            assert other is not None
+            self.assertEqual(other.name, "broadlink_remote_112233445566_codes")
+            self.assertIsNone(
+                actions.resolve_broadlink_codes_path(storage, ["missing"])
+            )
+            payload = actions.load_json_file(path)
+            devices, commands = parse_broadlink_codes_payload(payload)
+            self.assertEqual(devices, ["tv"])
+            self.assertEqual(commands, ["ok"])
+
+    def test_harmony_conf_matches_unique_id(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp)
+            (config_dir / "harmony_LivingRoom.conf").write_text(
+                '{"device": [{"id": 1, "label": "TV", "controlGroup": []}]}',
+                encoding="utf-8",
+            )
+            (config_dir / "harmony_Bedroom.conf").write_text(
+                '{"device": [{"id": 2, "label": "Bedroom TV"}]}',
+                encoding="utf-8",
+            )
+            path = actions.resolve_harmony_conf_path(
+                config_dir, ["remote.living_room", "LivingRoom"]
+            )
+            self.assertIsNotNone(path)
+            assert path is not None
+            self.assertEqual(path.name, "harmony_LivingRoom.conf")
+            bedroom = actions.resolve_harmony_conf_path(config_dir, ["Bedroom"])
+            assert bedroom is not None
+            self.assertEqual(bedroom.name, "harmony_Bedroom.conf")
+            self.assertIsNone(
+                actions.resolve_harmony_conf_path(config_dir, ["Kitchen"])
+            )
+            payload = actions.load_json_file(path)
+            devices, _commands = parse_harmony_config(payload)
+            self.assertEqual(devices, ["TV", "1"])
+
+    def test_load_json_missing_or_invalid(self) -> None:
+        self.assertIsNone(actions.load_json_file(None))
+        self.assertIsNone(actions.load_json_file("/no/such/file.json"))
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "broken.json"
+            bad.write_text("{not json", encoding="utf-8")
+            self.assertIsNone(actions.load_json_file(bad))
+
 
 _HARMONY_CONFIG = {
     "device": [
@@ -843,6 +941,7 @@ class HomeKitAccessoryHelperTests(unittest.TestCase):
 class ManufacturerAndSourceOrderTests(unittest.TestCase):
     def test_resolve_manufacturer(self) -> None:
         self.assertEqual(const.DEFAULT_MANUFACTURER, "IR Television")
+        self.assertEqual(const.DEVICE_MODEL, "Media Player")
         self.assertEqual(actions.resolve_manufacturer(None), "IR Television")
         self.assertEqual(actions.resolve_manufacturer({}), "IR Television")
         self.assertEqual(actions.resolve_manufacturer({"manufacturer": "  "}), "IR Television")
