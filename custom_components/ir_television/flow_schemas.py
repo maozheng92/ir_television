@@ -297,11 +297,22 @@ def is_harmony_remote(
     return isinstance(attrs, dict) and "current_activity" in attrs
 
 
+def _looks_like_harmony_config(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if isinstance(value.get("device"), list):
+        return True
+    devices = value.get("Devices")
+    if not isinstance(devices, dict):
+        devices = value.get("devices")
+    return isinstance(devices, dict)
+
+
 def _harmony_config_from_obj(value: Any) -> dict[str, Any] | None:
-    if isinstance(value, dict) and isinstance(value.get("device"), list):
+    if _looks_like_harmony_config(value):
         return value
     nested = value.get("config") if isinstance(value, dict) else None
-    if isinstance(nested, dict) and isinstance(nested.get("device"), list):
+    if _looks_like_harmony_config(nested):
         return nested
     for attr in ("config", "_config", "harmony_config", "hub_config"):
         cfg = getattr(value, attr, None)
@@ -310,7 +321,7 @@ def _harmony_config_from_obj(value: Any) -> dict[str, Any] | None:
                 cfg = cfg()
             except TypeError:
                 continue
-        if isinstance(cfg, dict) and isinstance(cfg.get("device"), list):
+        if _looks_like_harmony_config(cfg):
             return cfg
     client = getattr(value, "_client", None) or getattr(value, "client", None)
     if client is None:
@@ -322,7 +333,7 @@ def _harmony_config_from_obj(value: Any) -> dict[str, Any] | None:
                 cfg = cfg()
             except TypeError:
                 continue
-        if isinstance(cfg, dict) and isinstance(cfg.get("device"), list):
+        if _looks_like_harmony_config(cfg):
             return cfg
     return None
 
