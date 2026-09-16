@@ -5,6 +5,8 @@ This module must not import Home Assistant so it can be unit-tested with stdlib.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from .const import (
@@ -1209,11 +1211,17 @@ def parse_harmony_config(
     return devices, commands
 
 
-def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
+def parse_broadlink_codes_payload(
+    payload: Any,
+    *,
+    device: str | None = None,
+) -> tuple[list[str], list[str]]:
     """Extract learned Broadlink device and command names from a codes file.
 
     Accepts either the storage wrapper ``{"data": {...}}`` or the inner mapping
     ``{device_name: {command_name: code}}``.
+    When ``device`` is set, command names are limited to that device
+    (matched case-insensitive).
     """
     devices: set[str] = set()
     commands: set[str] = set()
@@ -1222,10 +1230,13 @@ def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
     inner = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     if not isinstance(inner, dict):
         return [], []
+    wanted = str(device).strip().lower() if device else ""
     for device_name, cmds in inner.items():
         name = str(device_name).strip() if device_name is not None else ""
         if name:
             devices.add(name)
+        if wanted and name.lower() != wanted:
+            continue
         if not isinstance(cmds, dict):
             continue
         for command in cmds:
@@ -1233,3 +1244,77 @@ def parse_broadlink_codes_payload(payload: Any) -> tuple[list[str], list[str]]:
             if cmd:
                 commands.add(cmd)
     return sorted(devices), sorted(commands)
+
+
+def expand_remote_identifiers(values: list[Any]) -> list[str]:
+    """Unique filename tokens from entity / config unique ids and MACs."""
+    result: list[str] = []
+    seen: set[str] = set()
+
+    def add(item: str) -> None:
+        text = item.strip()
+        if text and text not in seen:
+            seen.add(text)
+            result.append(text)
+
+    for raw in values:
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        add(text)
+        if text.lower().endswith("-remote"):
+            add(text[: -len("-remote")])
+        no_colon = text.replace(":", "")
+        add(no_colon)
+        compact = "".join(ch.lower() for ch in text if ch.isalnum())
+        add(compact)
+        if compact.endswith("remote") and len(compact) > 6:
+            add(compact[: -len("remote")])
+    return result
+
+
+def resolve_broadlink_codes_path(
+    storage_dir: Path | str, identifiers: list[Any]
+) -> Path | None:
+    """Return ``.storage/broadlink_remote_{mac}_codes`` for this Broadlink remote."""
+    directory = Path(storage_dir)
+    if not directory.is_dir():
+        return None
+    for ident in expand_remote_identifiers(identifiers):
+        token = "".join(ch.lower() for ch in ident if ch.isalnum())
+        if not token:
+            continue
+        path = directory / f"broadlink_remote_{token}_codes"
+        if path.is_file():
+            return path
+        path = directory / f"broadlink_remote_{ident}_codes"
+        if path.is_file():
+            return path
+    return None
+
+
+def resolve_harmony_conf_path(
+    config_dir: Path | str, identifiers: list[Any]
+) -> Path | None:
+    """Return ``harmony_{unique_id}.conf`` for this Harmony Hub."""
+    directory = Path(config_dir)
+    if not directory.is_dir():
+        return None
+    for ident in expand_remote_identifiers(identifiers):
+        path = directory / f"harmony_{ident}.conf"
+        if path.is_file():
+            return path
+    return None
+
+
+def load_json_file(path: Path | str | None) -> Any:
+    """Read a JSON object from disk, or None if missing / invalid."""
+    if path is None:
+        return None
+    file_path = Path(path)
+    try:
+        return json.loads(file_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError):
+        return None
