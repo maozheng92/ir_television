@@ -27,6 +27,7 @@ from .actions import (
     validate_source_name,
 )
 from .const import (
+    ACTION_BROADLINK,
     ACTION_BUTTON,
     ATTR_ACTION,
     ATTR_NAME,
@@ -64,7 +65,10 @@ from .flow_schemas import (
     action_schema,
     command_multi_schema,
     current_mappings_text,
+    defaults_device_schema,
     defaults_schema,
+    ir_codes_filename,
+    ir_details_schema,
     is_harmony_remote,
     name_schema,
     options_group_schema,
@@ -91,6 +95,8 @@ class TelevisionFlowMixin:
     _source_draft: dict[str, Any]
     _edit_source_index: int | None
     _button_sequence_ids: list[str]
+    _pending_ir_input: dict[str, Any] | None
+    _ir_details_kind: str
     _options_mode: bool
 
     def _reset_wizard(self, data: dict[str, Any] | None = None) -> None:
@@ -116,6 +122,8 @@ class TelevisionFlowMixin:
         self._source_draft = {}
         self._edit_source_index = None
         self._button_sequence_ids = []
+        self._pending_ir_input = None
+        self._ir_details_kind = "command"
         self._options_mode = False
 
     def _cmd_label(self, key: str) -> str:
@@ -148,21 +156,45 @@ class TelevisionFlowMixin:
     async def async_step_defaults(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Optional default IR remote (Broadlink or Harmony Hub) + device."""
+        """Pick the default IR remote; devices load from that remote's file next."""
         if user_input is not None:
             remote = user_input.get(CONF_DEFAULT_REMOTE) or None
-            device = (user_input.get(CONF_DEFAULT_DEVICE) or "").strip() or None
             self._data[CONF_DEFAULT_REMOTE] = remote
-            self._data[CONF_DEFAULT_DEVICE] = device
-            if self._options_mode:
-                return await self.async_step_init()
-            # One power key on the entity row (turn on / turn off share it).
-            self._queue_commands([CMD_POWER_TOGGLE], "power_sensor")
-            return await self.async_step_command()
+            if not remote:
+                self._data[CONF_DEFAULT_DEVICE] = None
+                if self._options_mode:
+                    return await self.async_step_init()
+                self._queue_commands([CMD_POWER_TOGGLE], "power_sensor")
+                return await self.async_step_command()
+            return await self.async_step_defaults_device()
 
         return self.async_show_form(
             step_id="defaults",
             data_schema=defaults_schema(self.hass, self._data),
+        )
+
+    async def async_step_defaults_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show IR devices from the selected remote's codes/conf file."""
+        remote = self._data.get(CONF_DEFAULT_REMOTE)
+        if not remote:
+            return await self.async_step_defaults()
+        if user_input is not None:
+            device = (user_input.get(CONF_DEFAULT_DEVICE) or "").strip() or None
+            self._data[CONF_DEFAULT_DEVICE] = device
+            if self._options_mode:
+                return await self.async_step_init()
+            self._queue_commands([CMD_POWER_TOGGLE], "power_sensor")
+            return await self.async_step_command()
+
+        return self.async_show_form(
+            step_id="defaults_device",
+            data_schema=defaults_device_schema(self.hass, self._data),
+            description_placeholders={
+                "remote_entity": str(remote),
+                "codes_file": ir_codes_filename(self.hass, remote),
+            },
         )
 
     async def async_step_power_mode(
@@ -247,24 +279,27 @@ class TelevisionFlowMixin:
         key = self._queue[0]
         errors: dict[str, str] = {}
         if user_input is not None:
-            action, error = parse_action_input(
-                user_input,
-                defaults=self._data,
-                require_device=is_harmony_remote(
-                    self.hass,
-                    user_input.get(CONF_REMOTE_ENTITY)
-                    or self._data.get(CONF_DEFAULT_REMOTE),
-                ),
-            )
-            if error:
-                errors["base"] = error
+            if user_input.get(CONF_ACTION_TYPE) == ACTION_BUTTON:
+                action, error = parse_action_input(user_input, defaults=self._data)
+                if error:
+                    errors["base"] = error
+                else:
+                    assert action is not None
+                    self._data[CONF_COMMANDS][key] = action
+                    self._queue.pop(0)
+                    if self._queue:
+                        return await self.async_step_command()
+                    return await self._proceed_after_queue()
             else:
-                assert action is not None
-                self._data[CONF_COMMANDS][key] = action
-                self._queue.pop(0)
-                if self._queue:
-                    return await self.async_step_command()
-                return await self._proceed_after_queue()
+                remote = user_input.get(CONF_REMOTE_ENTITY) or self._data.get(
+                    CONF_DEFAULT_REMOTE
+                )
+                if not remote:
+                    errors["base"] = "missing_remote"
+                else:
+                    self._pending_ir_input = {**user_input, CONF_REMOTE_ENTITY: remote}
+                    self._ir_details_kind = "command"
+                    return await self.async_step_ir_details()
 
         existing = self._data[CONF_COMMANDS].get(key)
         return self.async_show_form(
@@ -273,11 +308,81 @@ class TelevisionFlowMixin:
                 self.hass,
                 defaults=self._data,
                 existing=existing,
+                include_ir_details=False,
             ),
             errors=errors,
             description_placeholders={
                 "command": self._cmd_label(key),
                 "command_key": key,
+            },
+        )
+
+    async def async_step_ir_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """IR device and command names from the selected remote's file."""
+        pending = self._pending_ir_input or {}
+        remote = pending.get(CONF_REMOTE_ENTITY)
+        if not remote:
+            if self._ir_details_kind == "source":
+                return await self.async_step_source_action()
+            return await self.async_step_command()
+
+        existing = None
+        if self._ir_details_kind == "source":
+            if self._edit_source_index is not None:
+                existing = self._data[CONF_SOURCES][self._edit_source_index].get(
+                    ATTR_ACTION
+                )
+            elif self._source_draft.get(ATTR_ACTION):
+                existing = self._source_draft.get(ATTR_ACTION)
+        elif self._queue:
+            existing = self._data[CONF_COMMANDS].get(self._queue[0])
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            merged = {**pending, **user_input}
+            action, error = parse_action_input(
+                merged,
+                defaults=self._data,
+                require_device=is_harmony_remote(self.hass, remote),
+            )
+            if error:
+                errors["base"] = error
+            else:
+                self._pending_ir_input = None
+                if self._ir_details_kind == "source":
+                    self._source_draft[ATTR_ACTION] = action
+                    if self._edit_source_index is not None:
+                        return await self._finish_source_edit()
+                    return await self._finish_source_add()
+                key = self._queue[0]
+                assert action is not None
+                self._data[CONF_COMMANDS][key] = action
+                self._queue.pop(0)
+                if self._queue:
+                    return await self.async_step_command()
+                return await self._proceed_after_queue()
+
+        command_label_text = ""
+        command_key = ""
+        if self._ir_details_kind != "source" and self._queue:
+            command_key = self._queue[0]
+            command_label_text = self._cmd_label(command_key)
+        return self.async_show_form(
+            step_id="ir_details",
+            data_schema=ir_details_schema(
+                self.hass,
+                remote_entity_id=remote,
+                defaults=self._data,
+                existing=existing if isinstance(existing, dict) else None,
+            ),
+            errors=errors,
+            description_placeholders={
+                "remote_entity": str(remote),
+                "codes_file": ir_codes_filename(self.hass, remote),
+                "command": command_label_text or self._source_draft.get(ATTR_NAME, ""),
+                "command_key": command_key,
             },
         )
 
@@ -474,23 +579,15 @@ class TelevisionFlowMixin:
                     self._button_sequence_ids = ids
                     return await self.async_step_source_button_repeats()
             else:
-                action, error = parse_action_input(
-                    user_input,
-                    defaults=self._data,
-                    require_device=is_harmony_remote(
-                        self.hass,
-                        user_input.get(CONF_REMOTE_ENTITY)
-                        or self._data.get(CONF_DEFAULT_REMOTE),
-                    ),
+                remote = user_input.get(CONF_REMOTE_ENTITY) or self._data.get(
+                    CONF_DEFAULT_REMOTE
                 )
-                if error:
-                    errors["base"] = error
+                if not remote:
+                    errors["base"] = "missing_remote"
                 else:
-                    self._button_sequence_ids = []
-                    self._source_draft[ATTR_ACTION] = action
-                    if self._edit_source_index is not None:
-                        return await self._finish_source_edit()
-                    return await self._finish_source_add()
+                    self._pending_ir_input = {**user_input, CONF_REMOTE_ENTITY: remote}
+                    self._ir_details_kind = "source"
+                    return await self.async_step_ir_details()
 
         name = self._source_draft.get(ATTR_NAME, "")
         return self.async_show_form(
@@ -500,6 +597,7 @@ class TelevisionFlowMixin:
                 defaults=self._data,
                 existing=existing,
                 allow_button_sequence=True,
+                include_ir_details=False,
             ),
             errors=errors,
             description_placeholders={"source_name": name},
@@ -553,6 +651,7 @@ class TelevisionFlowMixin:
         )
         self._source_draft = {}
         self._button_sequence_ids = []
+        self._pending_ir_input = None
         if self._options_mode:
             return await self.async_step_sources()
         return await self.async_step_source_ask()
@@ -567,6 +666,7 @@ class TelevisionFlowMixin:
         self._source_draft = {}
         self._edit_source_index = None
         self._button_sequence_ids = []
+        self._pending_ir_input = None
         return await self.async_step_sources()
 
     async def async_step_sources(
@@ -830,11 +930,29 @@ class IRTelevisionOptionsFlow(OptionsFlow, TelevisionFlowMixin):
         self._ensure()
         return await super().async_step_power_sensor(user_input)
 
+    async def async_step_command(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure()
+        return await super().async_step_command(user_input)
+
     async def async_step_defaults(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         self._ensure()
         return await super().async_step_defaults(user_input)
+
+    async def async_step_defaults_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure()
+        return await super().async_step_defaults_device(user_input)
+
+    async def async_step_ir_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        self._ensure()
+        return await super().async_step_ir_details(user_input)
 
     async def async_step_volume(
         self, user_input: dict[str, Any] | None = None
