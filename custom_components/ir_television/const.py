@@ -57,6 +57,9 @@ ATTR_BUTTONS = "buttons"
 ATTR_INTERVAL = "interval"
 ATTR_REPEATS = "repeats"
 DEFAULT_BUTTON_INTERVAL = 0.3
+# Wait after the power-on command before replaying the previous input.
+# IR sets ignore a source command that arrives while they are still waking.
+SOURCE_RESTORE_DELAY = 1.0
 MAX_BUTTON_REPEATS = 10
 MAX_BUTTON_INTERVAL = 10.0
 

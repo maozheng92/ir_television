@@ -6,6 +6,7 @@ The companion ``remote`` platform is a HA helper, not a second HomeKit accessory
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -34,6 +35,7 @@ from .actions import (
     resolve_command_key,
     resolve_homekit_remote_key,
     resolve_power_press_key,
+    source_restore_target,
 )
 from .command_sender import async_send_action
 from .const import (
@@ -45,6 +47,7 @@ from .const import (
     CONF_SOURCES,
     DOMAIN,
     EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED,
+    SOURCE_RESTORE_DELAY,
     INTENT_PAUSE,
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
@@ -101,6 +104,8 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         self._muted = False
         self._volume = 0.5
         self._source: str | None = None
+        self._remembered_source: str | None = None
+        self._restore_generation = 0
         self._media_title: str | None = None
         self._media_content_type: MediaType | None = None
 
@@ -183,13 +188,50 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         """When was the position of the current playing media valid."""
         return None
 
+    def _note_source(self, source: str | None) -> None:
+        """Keep the selected input so power-off does not forget it."""
+        kept = current_source_name(source, self._sources())
+        if not kept:
+            return
+        self._source = kept
+        self._remembered_source = kept
+
     def _apply_power(self, is_on: bool) -> None:
         self._is_on = is_on
         if is_on:
-            self._media_title = current_source_name(self._source, self._sources())
+            self._media_title = current_source_name(
+                self._remembered_source or self._source, self._sources()
+            )
         else:
             self._media_title = None
             self._media_content_type = None
+
+    async def _async_restore_remembered_source(self) -> None:
+        """Replay the input that was active before the TV turned off."""
+        generation = self._restore_generation
+        name, action = source_restore_target(
+            self._remembered_source or self._source, self._sources()
+        )
+        if not name:
+            return
+        self._note_source(name)
+        if self._is_on:
+            self._media_title = name
+        self.async_write_ha_state()
+        if action is None:
+            return
+        await asyncio.sleep(SOURCE_RESTORE_DELAY)
+        if generation != self._restore_generation or not self._is_on:
+            return
+        current, _current_action = source_restore_target(self._source, self._sources())
+        if current != name:
+            return
+        await async_send_action(self.hass, action, f"source-restore:{name}")
+        if generation != self._restore_generation or not self._is_on:
+            return
+        self._note_source(name)
+        self._media_title = name
+        self.async_write_ha_state()
 
     def _mark_on_from_command(self) -> None:
         """Optimistic on only when there is no power sensor to contradict us."""
@@ -226,8 +268,15 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         )
         if parsed is None:
             return
+        was_on = self._is_on
+        if was_on and not parsed:
+            self._note_source(self._source)
+            self._restore_generation += 1
         self._apply_power(parsed)
         self.async_write_ha_state()
+        if parsed and not was_on:
+            self._restore_generation += 1
+            self.hass.async_create_task(self._async_restore_remembered_source())
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -247,12 +296,14 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
                 except (TypeError, ValueError):
                     pass
             if attrs.get("source"):
-                self._source = str(attrs["source"])
+                self._note_source(str(attrs["source"]))
 
         if not self._source:
             names = build_source_list(self._sources())
             if names:
-                self._source = names[0]
+                self._note_source(names[0])
+        elif not self._remembered_source:
+            self._note_source(self._source)
 
         runtime = self.hass.data.setdefault(DOMAIN, {}).setdefault(
             self._entry.entry_id, {}
@@ -305,8 +356,14 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
             )
         else:
             await async_send_action(self.hass, self._commands().get(key), f"power:{key}")
+        if not want_on:
+            self._note_source(self._source)
+            self._restore_generation += 1
         self._apply_power(want_on)
         self.async_write_ha_state()
+        if want_on and not is_on:
+            self._restore_generation += 1
+            await self._async_restore_remembered_source()
 
     async def async_turn_on(self) -> None:
         await self._async_power_button(want_on=True)
@@ -477,7 +534,8 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
             if await async_send_action(
                 self.hass, match.get(ATTR_ACTION), f"source:{source}"
             ):
-                self._source = match.get("name") or source
+                self._restore_generation += 1
+                self._note_source(str(match.get("name") or source))
                 self._mark_on_from_command()
                 self.async_write_ha_state()
             return
@@ -487,7 +545,8 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         target = normalize_source_name(source).lower()
         for name in build_source_list(self._sources()):
             if name.lower() == target:
-                self._source = name
+                self._restore_generation += 1
+                self._note_source(name)
                 self._mark_on_from_command()
                 self.async_write_ha_state()
                 return
