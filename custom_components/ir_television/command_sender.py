@@ -1,4 +1,8 @@
-"""Send a configured action via IR remote or button entities."""
+"""Send a configured action via IR remote or button entities.
+
+IR remotes use ``remote.send_command`` (Broadlink, Harmony Hub, or the
+Xiaomi Home universal remote). Buttons use ``button.press``.
+"""
 
 from __future__ import annotations
 

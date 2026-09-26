@@ -1175,5 +1175,113 @@ class ButtonSequenceTests(unittest.TestCase):
         self.assertIn("0.5s", summary)
 
 
+_XIAOMI_STORE = {
+    "version": 1,
+    "minor_version": 1,
+    "key": "xiaomi_home_remote_123456789_codes",
+    "data": {
+        "客厅电视": {
+            "power_on": "b64code",
+            "power_toggle": ["code_a", "code_b"],
+        },
+        "机顶盒": {"ok": "code_ok"},
+    },
+}
+
+
+class XiaomiCodesTests(unittest.TestCase):
+    def test_store_wrapper_and_toggle_lists(self) -> None:
+        devices, commands = actions.parse_xiaomi_codes_payload(_XIAOMI_STORE)
+        self.assertEqual(devices, ["客厅电视", "机顶盒"])
+        self.assertEqual(commands, ["ok", "power_on", "power_toggle"])
+
+    def test_filter_commands_by_learned_device(self) -> None:
+        devices, commands = actions.parse_xiaomi_codes_payload(
+            _XIAOMI_STORE, device="客厅电视"
+        )
+        self.assertEqual(devices, ["客厅电视", "机顶盒"])
+        self.assertEqual(commands, ["power_on", "power_toggle"])
+        _devices, commands = actions.parse_xiaomi_codes_payload(
+            {"客厅电视": {"hdmi_1": "xx"}}, device="客厅电视"
+        )
+        self.assertEqual(commands, ["hdmi_1"])
+
+    def test_invalid(self) -> None:
+        self.assertEqual(actions.parse_xiaomi_codes_payload(None), ([], []))
+        self.assertEqual(actions.parse_xiaomi_codes_payload([]), ([], []))
+
+    def test_codes_file_matches_did_tag_and_unique_id(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = Path(tmp)
+            (storage / "xiaomi_home_remote_123456789_codes").write_text(
+                '{"data": {"客厅电视": {"power_on": "xx"}}}', encoding="utf-8"
+            )
+            (storage / "xiaomi_home_remote_123456789_flags").write_text(
+                "{}", encoding="utf-8"
+            )
+            (storage / "xiaomi_home_remote_999888777_codes").write_text(
+                '{"data": {"other": {"mute": "yy"}}}', encoding="utf-8"
+            )
+            by_tag = actions.resolve_xiaomi_codes_path(storage, ["cn_123456789"])
+            self.assertIsNotNone(by_tag)
+            assert by_tag is not None
+            self.assertEqual(by_tag.name, "xiaomi_home_remote_123456789_codes")
+            by_unique = actions.resolve_xiaomi_codes_path(
+                storage,
+                [
+                    "remote.chuangmi_cn_123456789_v2",
+                    "xiaomi_home.chuangmi_cn_123456789_v2",
+                ],
+            )
+            assert by_unique is not None
+            self.assertEqual(by_unique.name, "xiaomi_home_remote_123456789_codes")
+            india = storage / "xiaomi_home_remote_55555555_codes"
+            india.write_text('{"data": {"tv": {"ok": "zz"}}}', encoding="utf-8")
+            by_india = actions.resolve_xiaomi_codes_path(storage, ["i2_55555555"])
+            assert by_india is not None
+            self.assertEqual(by_india.name, "xiaomi_home_remote_55555555_codes")
+            other = actions.resolve_xiaomi_codes_path(storage, ["de_999888777"])
+            assert other is not None
+            self.assertEqual(other.name, "xiaomi_home_remote_999888777_codes")
+            self.assertIsNone(actions.resolve_xiaomi_codes_path(storage, ["missing"]))
+            payload = actions.load_json_file(by_tag)
+            devices, commands = actions.parse_xiaomi_codes_payload(payload)
+            self.assertEqual(devices, ["客厅电视"])
+            self.assertEqual(commands, ["power_on"])
+
+    def test_xiaomi_requires_device_like_harmony(self) -> None:
+        _, err = parse_action_input(
+            {
+                "action_type": ACTION_BROADLINK,
+                "remote_entity": "remote.chuangmi_cn_123456789_v2",
+                "command": "power_on",
+            },
+            require_device=True,
+        )
+        self.assertEqual(err, "missing_device")
+        action, err = parse_action_input(
+            {
+                "action_type": ACTION_BROADLINK,
+                "remote_entity": "remote.chuangmi_cn_123456789_v2",
+                "command": "power_on",
+                "device": "客厅电视",
+            },
+            require_device=True,
+        )
+        self.assertIsNone(err)
+        assert action is not None
+        self.assertEqual(
+            build_remote_service_data(action),
+            {
+                "entity_id": "remote.chuangmi_cn_123456789_v2",
+                "command": "power_on",
+                "num_repeats": 1,
+                "device": "客厅电视",
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
