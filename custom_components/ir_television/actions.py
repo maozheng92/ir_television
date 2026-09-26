@@ -6,6 +6,7 @@ This module must not import Home Assistant so it can be unit-tested with stdlib.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -971,7 +972,9 @@ def parse_action_input(
     Returns (action, error_key). error_key is set on validation failure.
     Button mappings store a single entity; input sources use
     ``parse_source_button_ids`` then ``parse_source_button_sequence``.
-    ``require_device`` is set for Logitech Harmony Hub remotes.
+    ``require_device`` is set for Logitech Harmony Hub and the Xiaomi
+    universal remote (Xiaomi Home). Both need a device name on
+    ``remote.send_command``.
     """
     defaults = defaults or {}
     action_type = user_input.get(CONF_ACTION_TYPE)
@@ -1027,7 +1030,7 @@ def parse_action_input(
 
 
 def build_remote_service_data(action: ActionDict) -> dict[str, Any]:
-    """Build remote.send_command data for Broadlink or Harmony Hub."""
+    """Build remote.send_command data for Broadlink, Harmony, or Xiaomi."""
     data: dict[str, Any] = {
         "entity_id": action[ATTR_ENTITY_ID],
         "command": action[ATTR_COMMAND],
@@ -1372,6 +1375,110 @@ def resolve_broadlink_codes_path(
         if path.is_file():
             return path
     return None
+
+
+# Xiaomi Home (ha_xiaomi_home) universal remote, chuangmi.ir.v2.
+# Learned codes live in ``.storage/xiaomi_home_remote_{did}_codes``.
+# Device identifiers use ``slugify("{cloud_server}_{did}")``.
+XIAOMI_CLOUD_PREFIXES = ("cn_", "de_", "i2_", "ru_", "sg_", "us_")
+_XIAOMI_CODES_NAME = re.compile(r"^xiaomi_home_remote_(.+)_codes$")
+
+
+def parse_xiaomi_codes_payload(
+    payload: Any,
+    *,
+    device: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Extract learned Xiaomi universal-remote device and command names.
+
+    Accepts the Home Assistant Store file
+    (``{"version": 1, "key": "xiaomi_home_remote_{did}_codes", "data": {...}}``)
+    or the inner map ``{device_name: {command_name: code}}``.
+    A command value may be a base64 string or a two-code toggle list; only
+    the command name is used. When ``device`` is set, command names are
+    limited to that device (matched case-insensitive).
+    """
+    return parse_broadlink_codes_payload(payload, device=device)
+
+
+def _safe_storage_token(token: str) -> str | None:
+    text = token.strip()
+    if not text or "/" in text or "\\" in text or text in (".", ".."):
+        return None
+    return text
+
+
+def _xiaomi_codes_file(directory: Path, did: str) -> Path | None:
+    seen: set[str] = set()
+    for raw in (did, did.lower()):
+        token = _safe_storage_token(raw)
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        path = directory / f"xiaomi_home_remote_{token}_codes"
+        if path.is_file():
+            return path
+    return None
+
+
+def _identifier_mentions(token: str, identifiers: list[str]) -> bool:
+    """True when ``token`` appears as its own id inside any identifier."""
+    if len(token) < 4:
+        return False
+    variants = {token}
+    slug = "".join(ch if ch.isalnum() else "_" for ch in token)
+    if slug and slug != token:
+        variants.add(slug)
+    for text in identifiers:
+        for variant in variants:
+            if re.search(
+                rf"(?<![A-Za-z0-9]){re.escape(variant)}(?![A-Za-z0-9])",
+                text,
+                flags=re.IGNORECASE,
+            ):
+                return True
+    return False
+
+
+def resolve_xiaomi_codes_path(
+    storage_dir: Path | str, identifiers: list[Any]
+) -> Path | None:
+    """Return ``.storage/xiaomi_home_remote_{did}_codes`` for this remote.
+
+    ``did`` is the Xiaomi device id. Entity and device identifiers usually
+    carry ``{cloud}_{did}`` (for example ``cn_123456789``) or a unique id
+    that contains that tag.
+    """
+    directory = Path(storage_dir)
+    if not directory.is_dir():
+        return None
+    idents = expand_remote_identifiers(identifiers)
+    for ident in idents:
+        found = _xiaomi_codes_file(directory, ident)
+        if found is not None:
+            return found
+        lower = ident.lower()
+        for prefix in XIAOMI_CLOUD_PREFIXES:
+            if lower.startswith(prefix):
+                found = _xiaomi_codes_file(directory, ident[len(prefix) :])
+                if found is not None:
+                    return found
+    matches: list[tuple[int, Path]] = []
+    try:
+        paths = list(directory.glob("xiaomi_home_remote_*_codes"))
+    except OSError:
+        return None
+    for path in paths:
+        match = _XIAOMI_CODES_NAME.match(path.name)
+        if match is None or not path.is_file():
+            continue
+        did = match.group(1)
+        if _identifier_mentions(did, idents):
+            matches.append((len(did), path))
+    if not matches:
+        return None
+    matches.sort(key=lambda item: (-item[0], item[1].name))
+    return matches[0][1]
 
 
 def resolve_harmony_conf_path(

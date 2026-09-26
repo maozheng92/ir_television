@@ -29,8 +29,10 @@ from .actions import (
     load_json_file,
     parse_broadlink_codes_payload,
     parse_harmony_config,
+    parse_xiaomi_codes_payload,
     resolve_broadlink_codes_path,
     resolve_harmony_conf_path,
+    resolve_xiaomi_codes_path,
     summarize_action,
 )
 from .const import (
@@ -229,7 +231,7 @@ def _storage_dir(hass: HomeAssistant) -> Path:
 def ir_codes_file(
     hass: HomeAssistant, entity_id: str | None
 ) -> Path | None:
-    """Codes/conf file for this remote: Broadlink storage or Harmony conf."""
+    """Codes/conf file for this remote: Broadlink, Harmony, or Xiaomi Home."""
     platform, identifiers = _remote_lookup(hass, entity_id)
     config_dir = _config_dir(hass)
     storage_dir = _storage_dir(hass)
@@ -237,11 +239,15 @@ def ir_codes_file(
         platform is None and is_harmony_remote(hass, entity_id, _lookup=False)
     ):
         return resolve_harmony_conf_path(config_dir, identifiers)
+    if platform == "xiaomi_home":
+        return resolve_xiaomi_codes_path(storage_dir, identifiers)
     if platform == "broadlink":
         return resolve_broadlink_codes_path(storage_dir, identifiers)
-    return resolve_harmony_conf_path(
-        config_dir, identifiers
-    ) or resolve_broadlink_codes_path(storage_dir, identifiers)
+    return (
+        resolve_harmony_conf_path(config_dir, identifiers)
+        or resolve_xiaomi_codes_path(storage_dir, identifiers)
+        or resolve_broadlink_codes_path(storage_dir, identifiers)
+    )
 
 
 def ir_codes_filename(hass: HomeAssistant, entity_id: str | None) -> str:
@@ -288,13 +294,39 @@ def is_harmony_remote(
     )
     if platform == "harmony":
         return True
-    if platform == "broadlink":
+    if platform in ("broadlink", "xiaomi_home"):
         return False
     if _lookup and resolve_harmony_conf_path(_config_dir(hass), identifiers):
         return True
     state = hass.states.get(entity_id) if getattr(hass, "states", None) else None
     attrs = getattr(state, "attributes", None) if state is not None else None
     return isinstance(attrs, dict) and "current_activity" in attrs
+
+
+def is_xiaomi_remote(
+    hass: HomeAssistant,
+    entity_id: str | None,
+    *,
+    _lookup: bool = True,
+) -> bool:
+    """True when the remote is a Xiaomi Home universal infrared remote."""
+    if not entity_id or not isinstance(entity_id, str):
+        return False
+    platform, identifiers = (
+        _remote_lookup(hass, entity_id) if _lookup else (None, [])
+    )
+    if platform == "xiaomi_home":
+        return True
+    if platform in ("broadlink", "harmony"):
+        return False
+    if not _lookup:
+        return False
+    return resolve_xiaomi_codes_path(_storage_dir(hass), identifiers) is not None
+
+
+def ir_remote_requires_device(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Harmony Hub and Xiaomi Home both require a device on send_command."""
+    return is_harmony_remote(hass, entity_id) or is_xiaomi_remote(hass, entity_id)
 
 
 def _looks_like_harmony_config(value: Any) -> bool:
@@ -399,6 +431,21 @@ def learned_harmony_names(
     return devices, commands
 
 
+def learned_xiaomi_names(
+    hass: HomeAssistant,
+    *,
+    remote_entity_id: str | None = None,
+    device: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Device and command names from this Xiaomi universal remote's codes file."""
+    _platform, identifiers = _remote_lookup(hass, remote_entity_id)
+    path = resolve_xiaomi_codes_path(_storage_dir(hass), identifiers)
+    payload = load_json_file(path)
+    if payload is None:
+        return [], []
+    return parse_xiaomi_codes_payload(payload, device=device)
+
+
 def learned_ir_names(
     hass: HomeAssistant,
     *,
@@ -410,6 +457,10 @@ def learned_ir_names(
         return [], []
     if is_harmony_remote(hass, remote_entity_id):
         return learned_harmony_names(
+            hass, remote_entity_id=remote_entity_id, device=device
+        )
+    if is_xiaomi_remote(hass, remote_entity_id):
+        return learned_xiaomi_names(
             hass, remote_entity_id=remote_entity_id, device=device
         )
     return learned_broadlink_names(
@@ -602,7 +653,7 @@ def action_schema(
     allow_button_sequence: bool = False,
     include_ir_details: bool = True,
 ) -> vol.Schema:
-    """IR remote (Broadlink / Harmony Hub) or button mapping form.
+    """IR remote (Broadlink / Harmony Hub / Xiaomi Home) or button mapping form.
 
     ``allow_button_sequence`` is only for input sources (multi-select).
     Per-button repeats and interval are collected in a later step.

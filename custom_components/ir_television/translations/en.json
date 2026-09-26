@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Add an IR television",
-        "description": "Give this TV a name and the manufacturer shown in Home Assistant / HomeKit Accessory Information. You will map power, volume, playback, and sources in the next steps. Each command can be an IR remote (`remote.send_command`, Broadlink or Logitech Harmony Hub) or a Home Assistant button (`button.press`).",
+        "description": "Give this TV a name and the manufacturer shown in Home Assistant / HomeKit Accessory Information. You will map power, volume, playback, and sources in the next steps. Each command can be an IR remote (`remote.send_command`: Broadlink, Logitech Harmony Hub, or Xiaomi universal remote) or a Home Assistant button (`button.press`).",
         "data": {
           "name": "Television name",
           "manufacturer": "Manufacturer"
@@ -15,17 +15,17 @@
       },
       "defaults": {
         "title": "Default IR remote",
-        "description": "Optional. Pick the Broadlink or Logitech Harmony Hub `remote.*` used for most keys. The next step lists IR devices from **that remote's** file only.",
+        "description": "Optional. Pick the Broadlink, Logitech Harmony Hub, or Xiaomi universal remote `remote.*` used for most keys. The next step lists IR devices from **that remote's** file only.",
         "data": {
           "default_remote": "Default remote entity"
         },
         "data_description": {
-          "default_remote": "Broadlink uses `.storage/broadlink_remote_MACADDRESS_codes`. Harmony Hub uses `harmony_UNIQUE_ID.conf` in the config folder."
+          "default_remote": "Broadlink uses `.storage/broadlink_remote_MACADDRESS_codes`. Harmony Hub uses `harmony_UNIQUE_ID.conf` in the config folder. Xiaomi universal remote (Xiaomi Home) uses `.storage/xiaomi_home_remote_DID_codes`."
         }
       },
       "defaults_device": {
         "title": "Default IR device",
-        "description": "Devices for **{remote_entity}** are read from `{codes_file}`. Harmony Hub requires a device name or ID.",
+        "description": "Devices for **{remote_entity}** are read from `{codes_file}`. Harmony Hub and the Xiaomi universal remote require a device name.",
         "data": {
           "default_device": "Default IR device name"
         }
@@ -51,7 +51,7 @@
       },
       "command": {
         "title": "Map: {command}",
-        "description": "Configure **{command}** (`{command_key}`).\n\n• IR remote: pick Broadlink or Harmony Hub, then the next step lists devices from that remote's codes file.\n• Button: choose a `button.*` entity from the dropdown.",
+        "description": "Configure **{command}** (`{command_key}`).\n\n• IR remote: pick Broadlink, Harmony Hub, or Xiaomi universal remote, then the next step lists devices from that remote's codes file.\n• Button: choose a `button.*` entity from the dropdown.",
         "data": {
           "action_type": "Control method",
           "remote_entity": "IR remote entity",
@@ -61,23 +61,23 @@
           "button_entity": "Button entity"
         },
         "data_description": {
-          "remote_entity": "Required for IR unless you set a default remote. Broadlink RM and Logitech Harmony Hub both work.",
-          "device": "Broadlink learned device, or Harmony Hub device name / ID. Harmony Hub requires this field.",
-          "command": "Broadlink learned name (for example `power_on`) or Harmony command (for example `PowerToggle`).",
+          "remote_entity": "Required for IR unless you set a default remote. Broadlink, Logitech Harmony Hub, and Xiaomi universal remote (Xiaomi Home) all work.",
+          "device": "Broadlink learned device, Harmony Hub device name / ID, or the device name learned on the Xiaomi universal remote. Harmony Hub and Xiaomi require this field.",
+          "command": "Broadlink or Xiaomi learned name (for example `power_on`) or Harmony command (for example `PowerToggle`).",
           "button_entity": "Required when the control method is Button."
         }
       },
       "ir_details": {
         "title": "IR device: {command}",
-        "description": "Devices and commands for **{remote_entity}** are read from `{codes_file}` (`broadlink_remote_MACADDRESS_codes` or `harmony_UNIQUE_ID.conf`).",
+        "description": "Devices and commands for **{remote_entity}** are read from `{codes_file}` (`broadlink_remote_MACADDRESS_codes`, `harmony_UNIQUE_ID.conf`, or `xiaomi_home_remote_DID_codes`).",
         "data": {
           "device": "IR device name",
           "command": "Command name",
           "num_repeats": "IR repeats"
         },
         "data_description": {
-          "device": "Only devices from this remote's file are listed. Harmony Hub requires a device name or ID.",
-          "command": "Broadlink learned name (for example `power_on`) or Harmony command (for example `PowerToggle`)."
+          "device": "Only devices from this remote's file are listed. Harmony Hub and the Xiaomi universal remote require a device name.",
+          "command": "Broadlink or Xiaomi learned name (for example `power_on`) or Harmony command (for example `PowerToggle`)."
         }
       },
       "volume_select": {
@@ -153,7 +153,7 @@
       "duplicate_source": "A source with this name already exists.",
       "missing_remote": "Pick a remote entity, or go back and set a default IR remote.",
       "missing_command": "Enter the IR command name.",
-      "missing_device": "Harmony Hub needs an IR device name or ID.",
+      "missing_device": "Harmony Hub and the Xiaomi universal remote need an IR device name.",
       "missing_button": "Pick a button entity.",
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
       "invalid_action_type": "Choose IR remote or Button.",
@@ -197,7 +197,7 @@
       },
       "defaults": {
         "title": "Default IR remote",
-        "description": "Used when a later IR mapping leaves the remote empty. Pick Broadlink or Harmony Hub; the next step lists devices from that remote's file.",
+        "description": "Used when a later IR mapping leaves the remote empty. Pick Broadlink, Harmony Hub, or Xiaomi universal remote; the next step lists devices from that remote's file.",
         "data": {
           "default_remote": "Default remote entity"
         }
@@ -367,7 +367,7 @@
       "duplicate_source": "A source with this name already exists.",
       "missing_remote": "Pick a remote entity, or set a default IR remote first.",
       "missing_command": "Enter the IR command name.",
-      "missing_device": "Harmony Hub needs an IR device name or ID.",
+      "missing_device": "Harmony Hub and the Xiaomi universal remote need an IR device name.",
       "missing_button": "Pick a button entity.",
       "invalid_entity": "That entity is not a remote or button in the expected domain.",
       "invalid_action_type": "Choose IR remote or Button.",

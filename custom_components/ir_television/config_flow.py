@@ -69,7 +69,7 @@ from .flow_schemas import (
     defaults_schema,
     ir_codes_filename,
     ir_details_schema,
-    is_harmony_remote,
+    ir_remote_requires_device,
     name_schema,
     options_group_schema,
     power_mode_schema,
@@ -345,7 +345,7 @@ class TelevisionFlowMixin:
             action, error = parse_action_input(
                 merged,
                 defaults=self._data,
-                require_device=is_harmony_remote(self.hass, remote),
+                require_device=ir_remote_requires_device(self.hass, remote),
             )
             if error:
                 errors["base"] = error
