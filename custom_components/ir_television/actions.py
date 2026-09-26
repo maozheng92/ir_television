@@ -1496,7 +1496,11 @@ def resolve_harmony_conf_path(
 
 
 def load_json_file(path: Path | str | None) -> Any:
-    """Read a JSON object from disk, or None if missing / invalid."""
+    """Read a JSON object from disk, or None if missing / invalid.
+
+    This is blocking I/O. Callers on the event loop must run it via
+    ``hass.async_add_executor_job``.
+    """
     if path is None:
         return None
     file_path = Path(path)
