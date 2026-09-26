@@ -190,7 +190,7 @@ class TelevisionFlowMixin:
 
         return self.async_show_form(
             step_id="defaults_device",
-            data_schema=defaults_device_schema(self.hass, self._data),
+            data_schema=await defaults_device_schema(self.hass, self._data),
             description_placeholders={
                 "remote_entity": str(remote),
                 "codes_file": ir_codes_filename(self.hass, remote),
@@ -304,7 +304,7 @@ class TelevisionFlowMixin:
         existing = self._data[CONF_COMMANDS].get(key)
         return self.async_show_form(
             step_id="command",
-            data_schema=action_schema(
+            data_schema=await action_schema(
                 self.hass,
                 defaults=self._data,
                 existing=existing,
@@ -371,7 +371,7 @@ class TelevisionFlowMixin:
             command_label_text = self._cmd_label(command_key)
         return self.async_show_form(
             step_id="ir_details",
-            data_schema=ir_details_schema(
+            data_schema=await ir_details_schema(
                 self.hass,
                 remote_entity_id=remote,
                 defaults=self._data,
@@ -592,7 +592,7 @@ class TelevisionFlowMixin:
         name = self._source_draft.get(ATTR_NAME, "")
         return self.async_show_form(
             step_id="source_action",
-            data_schema=action_schema(
+            data_schema=await action_schema(
                 self.hass,
                 defaults=self._data,
                 existing=existing,

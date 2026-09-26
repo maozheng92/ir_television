@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import voluptuous as vol
 
@@ -255,7 +255,21 @@ def ir_codes_filename(hass: HomeAssistant, entity_id: str | None) -> str:
     return path.name if path is not None else "—"
 
 
-def learned_broadlink_names(
+async def _async_read_codes_file(
+    hass: HomeAssistant,
+    resolve: Callable[[Path, list[Any]], Path | None],
+    directory: Path,
+    identifiers: list[Any],
+) -> Any:
+    """Resolve and read a codes file outside the event loop."""
+
+    def _read() -> Any:
+        return load_json_file(resolve(directory, identifiers))
+
+    return await hass.async_add_executor_job(_read)
+
+
+async def learned_broadlink_names(
     hass: HomeAssistant,
     *,
     remote_entity_id: str | None = None,
@@ -263,8 +277,9 @@ def learned_broadlink_names(
 ) -> tuple[list[str], list[str]]:
     """Device and command names from this Broadlink remote's codes file."""
     _platform, identifiers = _remote_lookup(hass, remote_entity_id)
-    path = resolve_broadlink_codes_path(_storage_dir(hass), identifiers)
-    payload = load_json_file(path)
+    payload = await _async_read_codes_file(
+        hass, resolve_broadlink_codes_path, _storage_dir(hass), identifiers
+    )
     if payload is None:
         return [], []
     return parse_broadlink_codes_payload(payload, device=device)
@@ -402,7 +417,7 @@ def _harmony_configs(
     return configs
 
 
-def learned_harmony_names(
+async def learned_harmony_names(
     hass: HomeAssistant,
     *,
     remote_entity_id: str | None = None,
@@ -410,8 +425,9 @@ def learned_harmony_names(
 ) -> tuple[list[str], list[str]]:
     """Device labels/ids and command names from this Harmony Hub's conf file."""
     _platform, identifiers = _remote_lookup(hass, remote_entity_id)
-    path = resolve_harmony_conf_path(_config_dir(hass), identifiers)
-    payload = load_json_file(path)
+    payload = await _async_read_codes_file(
+        hass, resolve_harmony_conf_path, _config_dir(hass), identifiers
+    )
     if payload is not None:
         devices, commands = parse_harmony_config(payload, device=device)
         if device and not commands:
@@ -431,7 +447,7 @@ def learned_harmony_names(
     return devices, commands
 
 
-def learned_xiaomi_names(
+async def learned_xiaomi_names(
     hass: HomeAssistant,
     *,
     remote_entity_id: str | None = None,
@@ -439,14 +455,15 @@ def learned_xiaomi_names(
 ) -> tuple[list[str], list[str]]:
     """Device and command names from this Xiaomi universal remote's codes file."""
     _platform, identifiers = _remote_lookup(hass, remote_entity_id)
-    path = resolve_xiaomi_codes_path(_storage_dir(hass), identifiers)
-    payload = load_json_file(path)
+    payload = await _async_read_codes_file(
+        hass, resolve_xiaomi_codes_path, _storage_dir(hass), identifiers
+    )
     if payload is None:
         return [], []
     return parse_xiaomi_codes_payload(payload, device=device)
 
 
-def learned_ir_names(
+async def learned_ir_names(
     hass: HomeAssistant,
     *,
     remote_entity_id: str | None = None,
@@ -456,14 +473,14 @@ def learned_ir_names(
     if not remote_entity_id:
         return [], []
     if is_harmony_remote(hass, remote_entity_id):
-        return learned_harmony_names(
+        return await learned_harmony_names(
             hass, remote_entity_id=remote_entity_id, device=device
         )
     if is_xiaomi_remote(hass, remote_entity_id):
-        return learned_xiaomi_names(
+        return await learned_xiaomi_names(
             hass, remote_entity_id=remote_entity_id, device=device
         )
-    return learned_broadlink_names(
+    return await learned_broadlink_names(
         hass, remote_entity_id=remote_entity_id, device=device
     )
 
@@ -555,10 +572,12 @@ def defaults_schema(hass: HomeAssistant, data: dict[str, Any]) -> vol.Schema:
     return vol.Schema(schema)
 
 
-def defaults_device_schema(hass: HomeAssistant, data: dict[str, Any]) -> vol.Schema:
+async def defaults_device_schema(
+    hass: HomeAssistant, data: dict[str, Any]
+) -> vol.Schema:
     """IR devices from the selected remote's codes/conf file (always a dropdown)."""
     current_remote = data.get(CONF_DEFAULT_REMOTE) or None
-    devices, _commands = learned_ir_names(hass, remote_entity_id=current_remote)
+    devices, _commands = await learned_ir_names(hass, remote_entity_id=current_remote)
     current_device = data.get(CONF_DEFAULT_DEVICE) or ""
     schema: dict[Any, Any] = {}
     if current_device:
@@ -645,7 +664,7 @@ def options_group_schema(
     return vol.Schema(schema)
 
 
-def action_schema(
+async def action_schema(
     hass: HomeAssistant,
     *,
     defaults: dict[str, Any],
@@ -698,7 +717,7 @@ def action_schema(
             hass, "remote", current=suggested_remote
         )
     if include_ir_details:
-        devices, commands = learned_ir_names(
+        devices, commands = await learned_ir_names(
             hass, remote_entity_id=suggested_remote, device=suggested_device or None
         )
         device_field: Any = _name_dropdown(devices, current=suggested_device)
@@ -748,7 +767,7 @@ def action_schema(
     return vol.Schema(schema)
 
 
-def ir_details_schema(
+async def ir_details_schema(
     hass: HomeAssistant,
     *,
     remote_entity_id: str | None,
@@ -766,7 +785,7 @@ def ir_details_schema(
     if existing.get(ATTR_TYPE) == ACTION_BROADLINK:
         suggested_command = existing.get(ATTR_COMMAND) or ""
     suggested_repeats = existing.get(ATTR_NUM_REPEATS, 1)
-    devices, commands = learned_ir_names(
+    devices, commands = await learned_ir_names(
         hass, remote_entity_id=remote_entity_id, device=suggested_device or None
     )
     device_field: Any = _name_dropdown(devices, current=suggested_device)
