@@ -680,29 +680,6 @@ def current_source_name(source: str | None, sources: list[Any] | None) -> str | 
     return names[0]
 
 
-def source_restore_target(
-    remembered: str | None, sources: list[Any] | None
-) -> tuple[str | None, dict[str, Any] | None]:
-    """Source to show and, when mapped, send again after the TV turns on.
-
-    The name is the source that was active before power-off when it still
-    exists. If that name was removed, the list fallback is reported and no
-    command is sent. The implicit default source has no action.
-    """
-    names = build_source_list(sources)
-    if not names:
-        return None, None
-    target = normalize_source_name(remembered).lower()
-    matched = next((name for name in names if name.lower() == target), None) if target else None
-    if matched is None:
-        return names[0], None
-    found = find_source(sources, matched)
-    action = found.get(ATTR_ACTION) if isinstance(found, dict) else None
-    if not action_is_valid(action):
-        return matched, None
-    return matched, action
-
-
 def find_source(sources: list[SourceDict] | None, name: str) -> SourceDict | None:
     """Find a source by display name (case-insensitive)."""
     target = normalize_source_name(name).lower()

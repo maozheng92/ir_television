@@ -171,34 +171,6 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertEqual(current_source_name(None, sources), "HDMI1")
         self.assertEqual(current_source_name("missing", sources), "HDMI1")
 
-    def test_power_on_restores_the_source_from_before_power_off(self) -> None:
-        sources = [
-            {"name": "HDMI1", "action": _ir("hdmi1")},
-            {"name": "HDMI2", "action": _ir("hdmi2")},
-        ]
-        name, action = actions.source_restore_target("HDMI2", sources)
-        self.assertEqual(name, "HDMI2")
-        assert action is not None
-        self.assertEqual(action["command"], "hdmi2")
-        name, action = actions.source_restore_target("hdmi2", sources)
-        self.assertEqual(name, "HDMI2")
-        assert action is not None
-        self.assertEqual(action["command"], "hdmi2")
-
-    def test_power_on_does_not_send_a_different_source(self) -> None:
-        sources = [{"name": "HDMI1", "action": _ir("hdmi1")}]
-        name, action = actions.source_restore_target("HDMI2", sources)
-        self.assertEqual(name, "HDMI1")
-        self.assertIsNone(action)
-
-    def test_default_source_is_remembered_without_a_command(self) -> None:
-        name, action = actions.source_restore_target("TV", [])
-        self.assertEqual(name, DEFAULT_SOURCE_NAME)
-        self.assertIsNone(action)
-        name, action = actions.source_restore_target(None, [{"name": "HDMI1"}])
-        self.assertEqual(name, "HDMI1")
-        self.assertIsNone(action)
-
 
 class ResolveCommandTests(unittest.TestCase):
     def test_power_toggle_fallback(self) -> None:
