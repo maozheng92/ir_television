@@ -680,6 +680,31 @@ def current_source_name(source: str | None, sources: list[Any] | None) -> str | 
     return names[0]
 
 
+def source_kept_across_restart(
+    stored: str | None,
+    state_source: str | None,
+    sources: list[Any] | None,
+) -> str | None:
+    """Input to report after Home Assistant starts.
+
+    The media player base class omits ``source`` from state attributes while
+    the player is off, so a restart after power-off would otherwise fall back
+    to the first input. ``stored`` is the copy saved beside that state. The
+    state attribute is only used when that copy is missing.
+    """
+    names = build_source_list(sources)
+    if not names:
+        return None
+    for candidate in (stored, state_source):
+        target = normalize_source_name(candidate).lower()
+        if not target:
+            continue
+        for name in names:
+            if name.lower() == target:
+                return name
+    return names[0]
+
+
 def find_source(sources: list[SourceDict] | None, name: str) -> SourceDict | None:
     """Find a source by display name (case-insensitive)."""
     target = normalize_source_name(name).lower()

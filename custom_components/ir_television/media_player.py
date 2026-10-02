@@ -23,7 +23,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 
 from .actions import (
     build_source_list,
@@ -34,6 +34,7 @@ from .actions import (
     resolve_command_key,
     resolve_homekit_remote_key,
     resolve_power_press_key,
+    source_kept_across_restart,
 )
 from .command_sender import async_send_action
 from .const import (
@@ -60,6 +61,26 @@ from .entity import IRTelevisionEntity
 _LOGGER = logging.getLogger(__name__)
 
 _OFF_STATES = {"off", "unavailable", "unknown"}
+
+
+class _StoredSource(ExtraStoredData):
+    """Input that must survive a restart while the television is off."""
+
+    def __init__(self, source: str) -> None:
+        self.source = source
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"source": self.source}
+
+
+def _source_from_extra_data(extra: ExtraStoredData | None) -> str | None:
+    """Return the input saved beside the previous state, if any."""
+    if extra is None:
+        return None
+    raw = extra.as_dict().get("source")
+    if isinstance(raw, str) and raw.strip():
+        return raw
+    return None
 
 
 async def async_setup_entry(
@@ -137,6 +158,27 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
     def source_list(self) -> list[str]:
         """List of available input sources."""
         return build_source_list(self._sources())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Publish the input even while the television is off.
+
+        ``MediaPlayerEntity`` drops ``source`` from state attributes when the
+        state is off. HomeKit then resets the active input, and a restart
+        restores a state that no longer has the input from before power-off.
+        """
+        name = self.source
+        if not name:
+            return {}
+        return {"source": name}
+
+    @property
+    def extra_restore_state_data(self) -> ExtraStoredData | None:
+        """Persist the input separately from the off-state attributes."""
+        name = self.source
+        if not name:
+            return None
+        return _StoredSource(name)
 
     @property
     def volume_level(self) -> float | None:
@@ -241,6 +283,7 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
+        state_source: str | None = None
         if last is not None:
             state = last.state
             if state in _OFF_STATES:
@@ -255,13 +298,14 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
                     self._volume = max(0.0, min(1.0, float(attrs["volume_level"])))
                 except (TypeError, ValueError):
                     pass
-            if attrs.get("source"):
-                self._note_source(str(attrs["source"]))
+            raw_source = attrs.get("source")
+            if isinstance(raw_source, str) and raw_source.strip():
+                state_source = raw_source
 
-        if not self._source:
-            names = build_source_list(self._sources())
-            if names:
-                self._note_source(names[0])
+        stored = _source_from_extra_data(await self.async_get_last_extra_data())
+        kept = source_kept_across_restart(stored, state_source, self._sources())
+        if kept:
+            self._note_source(kept)
 
         runtime = self.hass.data.setdefault(DOMAIN, {}).setdefault(
             self._entry.entry_id, {}
