@@ -57,6 +57,9 @@ ATTR_BUTTONS = "buttons"
 ATTR_INTERVAL = "interval"
 ATTR_REPEATS = "repeats"
 DEFAULT_BUTTON_INTERVAL = 0.3
+# How long to wait for the power sensor after an on/off command.
+# HomeKit keeps the tile on the requested power until the service ends.
+POWER_SENSOR_CONFIRM_TIMEOUT = 3.0
 MAX_BUTTON_REPEATS = 10
 MAX_BUTTON_INTERVAL = 10.0
 
