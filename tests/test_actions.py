@@ -171,6 +171,34 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertEqual(current_source_name(None, sources), "HDMI1")
         self.assertEqual(current_source_name("missing", sources), "HDMI1")
 
+    def test_restart_keeps_the_source_from_before_power_off(self) -> None:
+        sources = [{"name": "HDMI1"}, {"name": "HDMI2"}]
+        # An off media player has no source attribute. The stored copy remains.
+        self.assertEqual(
+            actions.source_kept_across_restart("HDMI2", None, sources), "HDMI2"
+        )
+        self.assertEqual(
+            actions.source_kept_across_restart("hdmi2", None, sources), "HDMI2"
+        )
+
+    def test_restart_uses_the_state_source_when_nothing_was_stored(self) -> None:
+        sources = [{"name": "HDMI1"}, {"name": "HDMI2"}]
+        self.assertEqual(
+            actions.source_kept_across_restart(None, "HDMI2", sources), "HDMI2"
+        )
+
+    def test_restart_prefers_the_stored_source(self) -> None:
+        sources = [{"name": "HDMI1"}, {"name": "HDMI2"}]
+        self.assertEqual(
+            actions.source_kept_across_restart("HDMI2", "HDMI1", sources), "HDMI2"
+        )
+
+    def test_restart_falls_back_when_the_stored_source_was_removed(self) -> None:
+        sources = [{"name": "HDMI1"}]
+        self.assertEqual(
+            actions.source_kept_across_restart("HDMI2", None, sources), "HDMI1"
+        )
+
 
 class ResolveCommandTests(unittest.TestCase):
     def test_power_toggle_fallback(self) -> None:
