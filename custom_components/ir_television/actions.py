@@ -1173,6 +1173,15 @@ def displayed_power_after_command(
     return sensor_on
 
 
+def power_sensor_rejected_command(want_on: bool, sensor_on: bool | None) -> bool:
+    """True when a clear sensor reading disagrees with the requested power.
+
+    HomeKit applies the requested power immediately and only re-reads the
+    entity when the service fails. An unchanged off state does not notify it.
+    """
+    return sensor_on is not None and sensor_on is not want_on
+
+
 def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | None]:
     """Validate an optional binary_sensor entity id.
 

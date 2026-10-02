@@ -483,6 +483,15 @@ class PowerSensorTests(unittest.TestCase):
         self.assertTrue(shown(True, False, None, has_sensor=False))
         self.assertFalse(shown(False, True, None, has_sensor=False))
 
+    def test_homekit_must_fail_when_the_sensor_rejects_power(self) -> None:
+        rejected = actions.power_sensor_rejected_command
+        self.assertTrue(rejected(True, False))
+        self.assertTrue(rejected(False, True))
+        self.assertFalse(rejected(True, True))
+        self.assertFalse(rejected(False, False))
+        self.assertFalse(rejected(True, None))
+        self.assertFalse(rejected(False, None))
+
     def test_normalize(self) -> None:
         self.assertEqual(normalize_power_sensor(None), (None, None))
         self.assertEqual(normalize_power_sensor("  "), (None, None))

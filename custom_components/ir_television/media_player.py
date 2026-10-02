@@ -6,6 +6,7 @@ The companion ``remote`` platform is a HA helper, not a second HomeKit accessory
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -21,6 +22,7 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
@@ -32,6 +34,7 @@ from .actions import (
     find_source,
     normalize_source_name,
     power_is_on_from_sensor,
+    power_sensor_rejected_command,
     resolve_command_key,
     resolve_homekit_remote_key,
     resolve_power_press_key,
@@ -47,6 +50,7 @@ from .const import (
     CONF_SOURCES,
     DOMAIN,
     EVENT_HOMEKIT_TV_REMOTE_KEY_PRESSED,
+    POWER_SENSOR_CONFIRM_TIMEOUT,
     INTENT_PAUSE,
     INTENT_PLAY,
     INTENT_PLAY_PAUSE,
@@ -275,6 +279,18 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         self._apply_power(parsed)
         return True
 
+    async def _async_wait_for_power_sensor(self, want_on: bool) -> bool | None:
+        """Return the sensor reading, waiting briefly for the requested power."""
+        deadline = asyncio.get_running_loop().time() + POWER_SENSOR_CONFIRM_TIMEOUT
+        reading = self._sensor_power()
+        while reading is not want_on:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(0.2, remaining))
+            reading = self._sensor_power()
+        return reading
+
     @callback
     def _async_power_sensor_event(self, event: Event) -> None:
         new_state = event.data.get("new_state") if event.data else None
@@ -369,15 +385,28 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
             await async_send_action(self.hass, self._commands().get(key), f"power:{key}")
         if not want_on:
             self._note_source(self._source)
+        if self._power_sensor is None:
+            self._apply_power(want_on)
+            self.async_write_ha_state()
+            return
+        reading = await self._async_wait_for_power_sensor(want_on)
         self._apply_power(
             displayed_power_after_command(
                 want_on,
                 self._is_on,
-                self._sensor_power(),
-                has_sensor=self._power_sensor is not None,
+                reading,
+                has_sensor=True,
             )
         )
         self.async_write_ha_state()
+        if power_sensor_rejected_command(want_on, reading):
+            # HomeKit already showed the requested power. It only re-reads
+            # the entity when this service fails; writing "off" again does
+            # not notify it when the state was already off.
+            requested = "on" if want_on else "off"
+            raise HomeAssistantError(
+                f"Power sensor did not confirm the television turned {requested}"
+            )
 
     async def async_turn_on(self) -> None:
         await self._async_power_button(want_on=True)
