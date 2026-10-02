@@ -1153,6 +1153,26 @@ def power_is_on_from_sensor(state: str | None, *, invert: bool = False) -> bool 
     return (not is_on) if invert else is_on
 
 
+def displayed_power_after_command(
+    want_on: bool,
+    current: bool,
+    sensor_on: bool | None,
+    *,
+    has_sensor: bool,
+) -> bool:
+    """Power to show after a power command.
+
+    A configured sensor is the display. A clear reading wins, so the control
+    stays off when the sensor stays off. An unclear reading keeps the power
+    already shown. With no sensor, the requested power is assumed.
+    """
+    if not has_sensor:
+        return want_on
+    if sensor_on is None:
+        return current
+    return sensor_on
+
+
 def normalize_power_sensor(entity_id: str | None) -> tuple[str | None, str | None]:
     """Validate an optional binary_sensor entity id.
 

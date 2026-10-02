@@ -28,6 +28,7 @@ from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from .actions import (
     build_source_list,
     current_source_name,
+    displayed_power_after_command,
     find_source,
     normalize_source_name,
     power_is_on_from_sensor,
@@ -97,7 +98,6 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
 
     # Attribute set copied from braviatv/media_player.py BraviaTVMediaPlayer.
     _attr_name = None
-    _attr_assumed_state = True
     _attr_device_class = MediaPlayerDeviceClass.TV
     _attr_supported_features = (
         MediaPlayerEntityFeature.PAUSE
@@ -141,6 +141,11 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
     @property
     def _power_sensor_invert(self) -> bool:
         return bool(self._entry.data.get(CONF_POWER_SENSOR_INVERT))
+
+    @property
+    def assumed_state(self) -> bool:
+        """Assume power only when no sensor can confirm it."""
+        return not self._power_sensor
 
     @property
     def state(self) -> MediaPlayerState:
@@ -251,16 +256,20 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
         self._sync_from_power_sensor()
         return self._is_on
 
-    def _sync_from_power_sensor(self) -> bool:
-        """Apply current binary_sensor state. Returns True if a clear reading was used."""
+    def _sensor_power(self) -> bool | None:
+        """Clear TV power from the configured sensor, or None."""
         sensor = self._power_sensor
         if not sensor:
-            return False
+            return None
         state = self.hass.states.get(sensor)
-        parsed = power_is_on_from_sensor(
+        return power_is_on_from_sensor(
             None if state is None else state.state,
             invert=self._power_sensor_invert,
         )
+
+    def _sync_from_power_sensor(self) -> bool:
+        """Apply current binary_sensor state. Returns True if a clear reading was used."""
+        parsed = self._sensor_power()
         if parsed is None:
             return False
         self._apply_power(parsed)
@@ -360,7 +369,14 @@ class IRTelevisionMediaPlayer(IRTelevisionEntity, MediaPlayerEntity, RestoreEnti
             await async_send_action(self.hass, self._commands().get(key), f"power:{key}")
         if not want_on:
             self._note_source(self._source)
-        self._apply_power(want_on)
+        self._apply_power(
+            displayed_power_after_command(
+                want_on,
+                self._is_on,
+                self._sensor_power(),
+                has_sensor=self._power_sensor is not None,
+            )
+        )
         self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:

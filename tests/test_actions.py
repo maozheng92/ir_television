@@ -466,6 +466,23 @@ class PowerSensorTests(unittest.TestCase):
         self.assertTrue(power_is_on_from_sensor("off", invert=True))
         self.assertIsNone(power_is_on_from_sensor("unavailable", invert=True))
 
+    def test_display_follows_sensor_after_power_command(self) -> None:
+        shown = actions.displayed_power_after_command
+        self.assertFalse(shown(True, False, False, has_sensor=True))
+        self.assertTrue(shown(False, True, True, has_sensor=True))
+        self.assertTrue(shown(True, False, True, has_sensor=True))
+        self.assertFalse(shown(False, True, False, has_sensor=True))
+
+    def test_unclear_sensor_does_not_assume_the_command(self) -> None:
+        shown = actions.displayed_power_after_command
+        self.assertFalse(shown(True, False, None, has_sensor=True))
+        self.assertTrue(shown(False, True, None, has_sensor=True))
+
+    def test_without_sensor_the_command_is_assumed(self) -> None:
+        shown = actions.displayed_power_after_command
+        self.assertTrue(shown(True, False, None, has_sensor=False))
+        self.assertFalse(shown(False, True, None, has_sensor=False))
+
     def test_normalize(self) -> None:
         self.assertEqual(normalize_power_sensor(None), (None, None))
         self.assertEqual(normalize_power_sensor("  "), (None, None))
